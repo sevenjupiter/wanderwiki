@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -19,10 +20,48 @@ import {
   Plus, MapPin, Clock, Car, Camera, Compass, Star, Utensils,
   GripVertical, Trash2, Sparkles, Route, Share2, Globe, Lock,
   DollarSign, MessageSquare, ExternalLink, ChevronUp, ChevronDown,
-  Wand2, Send, Map as MapIcon, X, Pencil,
+  Wand2, Send, Map as MapIcon, X, Pencil, Bed, Check,
 } from "lucide-react";
 import { MapView } from "@/components/Map";
 import { Streamdown } from "streamdown";
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext, useSortable, verticalListSortingStrategy, arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+// 30-minute granular time options, e.g. "00:00", "00:30", "01:00" ...
+const TIME_OPTIONS: string[] = Array.from({ length: 48 }, (_, i) => {
+  const h = Math.floor(i / 2).toString().padStart(2, "0");
+  const m = i % 2 === 0 ? "00" : "30";
+  return `${h}:${m}`;
+});
+
+function formatTimeLabel(t: string) {
+  const [hStr, m] = t.split(":");
+  const h = parseInt(hStr, 10);
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${m} ${period}`;
+}
+
+function TimeSelect({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <Select value={value || undefined} onValueChange={onChange}>
+      <SelectTrigger>
+        <SelectValue placeholder={placeholder || "--:--"} />
+      </SelectTrigger>
+      <SelectContent className="max-h-64">
+        {TIME_OPTIONS.map((t) => (
+          <SelectItem key={t} value={t}>{formatTimeLabel(t)}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 const categoryIcons: Record<string, typeof Camera> = {
   "must-see": Camera,
@@ -324,6 +363,20 @@ function ItineraryEditor({ id }: { id: number }) {
                 <Route className="w-4 h-4" />
                 {optimizeMutation.isPending ? "Optimizing..." : "Optimize Route"}
               </Button>
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1">
+                    <Sparkles className="w-4 h-4" />
+                    AI Assistant
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="w-full sm:max-w-lg p-4">
+                  <SheetHeader>
+                    <SheetTitle>AI Travel Assistant</SheetTitle>
+                  </SheetHeader>
+                  <AITab itineraryId={id} destination={data.destination} stops={data.stops || []} />
+                </SheetContent>
+              </Sheet>
             </div>
           </div>
 
@@ -342,13 +395,9 @@ function ItineraryEditor({ id }: { id: number }) {
                 <DollarSign className="w-4 h-4" />
                 Budget
               </TabsTrigger>
-              <TabsTrigger value="booking" className="gap-1.5">
-                <ExternalLink className="w-4 h-4" />
-                Booking
-              </TabsTrigger>
-              <TabsTrigger value="ai" className="gap-1.5">
-                <Sparkles className="w-4 h-4" />
-                AI Assistant
+              <TabsTrigger value="accommodation" className="gap-1.5">
+                <Bed className="w-4 h-4" />
+                Accommodation
               </TabsTrigger>
             </TabsList>
 
@@ -373,14 +422,9 @@ function ItineraryEditor({ id }: { id: number }) {
               <BudgetTab itineraryId={id} budget={data.budget || []} currency={data.currency || "USD"} refetch={refetch} />
             </TabsContent>
 
-            {/* Booking Tab */}
-            <TabsContent value="booking">
+            {/* Accommodation Tab */}
+            <TabsContent value="accommodation">
               <BookingTab destination={data.destination} />
-            </TabsContent>
-
-            {/* AI Tab */}
-            <TabsContent value="ai">
-              <AITab itineraryId={id} destination={data.destination} stops={data.stops || []} />
             </TabsContent>
           </Tabs>
         </div>
@@ -404,49 +448,46 @@ function ItineraryTab({
   const [addStopOpen, setAddStopOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [editStop, setEditStop] = useState<any>(null);
+  const [draftOpen, setDraftOpen] = useState(false);
 
-  const suggestMutation = trpc.ai.suggestStops.useMutation({
-    onSuccess: () => toast.success("AI suggestions ready!"),
-    onError: () => toast.error("Failed to get suggestions"),
+  const draftMutation = trpc.ai.suggestStops.useMutation({
+    onSuccess: () => setDraftOpen(true),
+    onError: () => toast.error("Failed to generate draft"),
   });
 
   const reorderMutation = trpc.stop.reorder.useMutation({
-    onSuccess: () => { refetch(); toast.success("Reordered!"); },
+    onSuccess: () => refetch(),
   });
-
-  const moveStop = (stop: any, direction: "up" | "down", dayStops: any[]) => {
-    const sorted = [...dayStops].sort((a, b) => a.orderIndex - b.orderIndex);
-    const idx = sorted.findIndex(s => s.id === stop.id);
-    if (direction === "up" && idx > 0) {
-      const orders = sorted.map((s, i) => ({ id: s.id, dayNumber: s.dayNumber, orderIndex: i }));
-      [orders[idx], orders[idx - 1]] = [orders[idx - 1], orders[idx]];
-      orders.forEach((o, i) => o.orderIndex = i);
-      reorderMutation.mutate({ itineraryId, orders });
-    } else if (direction === "down" && idx < sorted.length - 1) {
-      const orders = sorted.map((s, i) => ({ id: s.id, dayNumber: s.dayNumber, orderIndex: i }));
-      [orders[idx], orders[idx + 1]] = [orders[idx + 1], orders[idx]];
-      orders.forEach((o, i) => o.orderIndex = i);
-      reorderMutation.mutate({ itineraryId, orders });
-    }
-  };
 
   const filterStops = (dayStops: any[]) => {
     if (categoryFilter === "all") return dayStops;
     return dayStops.filter(s => s.category === categoryFilter);
   };
 
+  const handleDragEnd = (day: number) => (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const sorted = [...(stopsByDay[day] || [])].sort((a, b) => a.orderIndex - b.orderIndex);
+    const oldIndex = sorted.findIndex((s) => s.id === active.id);
+    const newIndex = sorted.findIndex((s) => s.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(sorted, oldIndex, newIndex);
+    const orders = reordered.map((s, i) => ({ id: s.id, dayNumber: day, orderIndex: i }));
+    reorderMutation.mutate({ itineraryId, orders });
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex items-center gap-3 flex-wrap">
         <Button
           variant="outline"
           size="sm"
-          onClick={() => suggestMutation.mutate({ destination, duration: days })}
-          disabled={suggestMutation.isPending}
+          onClick={() => draftMutation.mutate({ destination, duration: days })}
+          disabled={draftMutation.isPending}
           className="gap-1"
         >
           <Wand2 className="w-4 h-4" />
-          {suggestMutation.isPending ? "Getting suggestions..." : "AI Suggest Stops"}
+          {draftMutation.isPending ? "Generating draft..." : "Generate AI Draft"}
         </Button>
         <div className="flex items-center gap-1.5 ml-auto">
           <span className="text-xs text-muted-foreground">Filter:</span>
@@ -468,90 +509,90 @@ function ItineraryTab({
         </div>
       </div>
 
-      {/* AI Suggestions */}
-      {suggestMutation.data && suggestMutation.data.length > 0 && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-primary" />
-              AI Suggestions for {destination}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {suggestMutation.data.map((suggestion: any, i: number) => (
-              <AISuggestionCard
-                key={i}
-                suggestion={suggestion}
-                itineraryId={itineraryId}
-                dayCount={days}
-                refetch={refetch}
-              />
-            ))}
-          </CardContent>
-        </Card>
+      {/* AI Draft import preview */}
+      {draftMutation.data && draftMutation.data.length > 0 && (
+        <AIDraftPreview
+          suggestions={draftMutation.data}
+          itineraryId={itineraryId}
+          days={days}
+          open={draftOpen}
+          onOpenChange={setDraftOpen}
+          onImported={refetch}
+        />
       )}
 
-      {/* Day-by-Day Stops */}
+      {/* Day-by-Day Itinerary Table */}
       {Array.from({ length: days }, (_, i) => i + 1).map((day) => {
-        const dayStops = stopsByDay[day] || [];
-        const totalTravelTime = dayStops.reduce((sum: number, s: any) => sum + (s.travelTimeFromPrev || 0), 0);
-        const totalDuration = dayStops.reduce((sum: number, s: any) => sum + (s.duration || 0), 0);
-        const stopCount = dayStops.length;
+        const dayStops = filterStops(stopsByDay[day] || []).sort((a: any, b: any) => a.orderIndex - b.orderIndex);
+        const totalTravelTime = (stopsByDay[day] || []).reduce((sum: number, s: any) => sum + (s.travelTimeFromPrev || 0), 0);
+        const totalDuration = (stopsByDay[day] || []).reduce((sum: number, s: any) => sum + (s.duration || 0), 0);
+        const stopCount = (stopsByDay[day] || []).length;
 
         return (
-        <div key={day} className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">
-                  {day}
-                </div>
-                Day {day}
-              </h3>
-              {stopCount > 0 && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{stopCount} stops</span>
-                  {totalDuration > 0 && <span>• {Math.round(totalDuration / 60)}h activity</span>}
-                  {totalTravelTime > 0 && (
-                    <span className="flex items-center gap-0.5">
-                      <Car className="w-3 h-3" />
-                      {totalTravelTime} min travel
-                    </span>
-                  )}
-                </div>
-              )}
+          <div key={day} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h3 className="text-base font-semibold flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">
+                    {day}
+                  </div>
+                  Day {day}
+                </h3>
+                {stopCount > 0 && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{stopCount} stops</span>
+                    {totalDuration > 0 && <span>• {Math.round(totalDuration / 60)}h activity</span>}
+                    {totalTravelTime > 0 && (
+                      <span className="flex items-center gap-0.5">
+                        <Car className="w-3 h-3" />
+                        {totalTravelTime} min travel
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setAddStopDay(day); setAddStopOpen(true); }}
+                className="gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Stop
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => { setAddStopDay(day); setAddStopOpen(true); }}
-              className="gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Stop
-            </Button>
-          </div>
 
-          <div className="space-y-2 ml-3.5 border-l-2 border-border/70 pl-5">
-            {filterStops(stopsByDay[day] || [])
-              .sort((a: any, b: any) => a.orderIndex - b.orderIndex)
-              .map((stop: any) => (
-                <StopCard
-                  key={stop.id}
-                  stop={stop}
-                  refetch={refetch}
-                  onEdit={() => setEditStop(stop)}
-                  onMoveUp={() => moveStop(stop, "up", stopsByDay[day] || [])}
-                  onMoveDown={() => moveStop(stop, "down", stopsByDay[day] || [])}
-                />
-              ))}
-            {filterStops(stopsByDay[day] || []).length === 0 && (
-              <p className="text-sm text-muted-foreground py-4 italic">
-                {categoryFilter !== "all" ? `No ${categoryFilter} stops for this day.` : "No stops added yet for this day."}
-              </p>
-            )}
+            <Card className="overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-muted-foreground text-xs">
+                  <tr>
+                    <th className="w-6" />
+                    <th className="text-left font-medium px-3 py-2 w-32">Time</th>
+                    <th className="text-left font-medium px-3 py-2">Activity</th>
+                    <th className="text-left font-medium px-3 py-2 hidden md:table-cell">Tips</th>
+                    <th className="text-right font-medium px-3 py-2 w-20">Actions</th>
+                  </tr>
+                </thead>
+                <DndContextWrapper onDragEnd={handleDragEnd(day)} ids={dayStops.map((s: any) => s.id)}>
+                  <tbody>
+                    {dayStops.map((stop: any) => (
+                      <StopRow
+                        key={stop.id}
+                        stop={stop}
+                        refetch={refetch}
+                        onEdit={() => setEditStop(stop)}
+                      />
+                    ))}
+                  </tbody>
+                </DndContextWrapper>
+              </table>
+              {dayStops.length === 0 && (
+                <p className="text-sm text-muted-foreground py-6 text-center italic">
+                  {categoryFilter !== "all" ? `No ${categoryFilter} stops for this day.` : "No stops added yet for this day."}
+                </p>
+              )}
+            </Card>
           </div>
-        </div>
         );
       })}
 
@@ -579,14 +620,25 @@ function ItineraryTab({
   );
 }
 
-// ============ STOP CARD ============
+// ============ DND WRAPPER ============
 
-function StopCard({ stop, refetch, onEdit, onMoveUp, onMoveDown }: {
+function DndContextWrapper({ children, onDragEnd, ids }: { children: React.ReactNode; onDragEnd: (e: DragEndEvent) => void; ids: number[] }) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        {children}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+// ============ STOP ROW (TABLE) ============
+
+function StopRow({ stop, refetch, onEdit }: {
   stop: any;
   refetch: () => void;
   onEdit?: () => void;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
 }) {
   const Icon = categoryIcons[stop.category] || MapPin;
   const colorClass = categoryColors[stop.category] || "";
@@ -594,72 +646,76 @@ function StopCard({ stop, refetch, onEdit, onMoveUp, onMoveDown }: {
     onSuccess: () => { refetch(); toast.success("Stop removed"); },
   });
 
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+
   return (
-    <Card className="relative group">
-      <div className="absolute -left-[27px] top-5 w-3 h-3 rounded-full bg-background border-2 border-primary/70" />
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          {/* Reorder buttons */}
-          <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onMoveUp}>
-              <ChevronUp className="w-3 h-3" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onMoveDown}>
-              <ChevronDown className="w-3 h-3" />
-            </Button>
+    <tr ref={setNodeRef} style={style} className="border-t border-border/60 group hover:bg-muted/30">
+      <td className="pl-2">
+        <button {...attributes} {...listeners} className="cursor-grab text-muted-foreground/50 hover:text-muted-foreground touch-none">
+          <GripVertical className="w-4 h-4" />
+        </button>
+      </td>
+      <td className="px-3 py-2.5 align-top whitespace-nowrap">
+        {stop.startTime ? (
+          <span className="text-xs flex items-center gap-1">
+            <Clock className="w-3 h-3 text-muted-foreground" />
+            {formatTimeLabel(stop.startTime)}{stop.endTime && ` – ${formatTimeLabel(stop.endTime)}`}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground italic">No time</span>
+        )}
+        {stop.travelTimeFromPrev ? (
+          <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Car className="w-3 h-3" />
+            {stop.travelTimeFromPrev} min
           </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <Badge className={`text-xs border ${colorClass}`}>
-                <Icon className="w-3 h-3 mr-1" />
-                {stop.category}
-              </Badge>
-              {stop.startTime && (
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {stop.startTime}{stop.endTime && ` - ${stop.endTime}`}
-                </span>
-              )}
-            </div>
-            <h4 className="font-medium">{stop.title}</h4>
-            {stop.address && (
-              <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                <MapPin className="w-3 h-3" />
-                {stop.address}
-              </p>
-            )}
-            {stop.description && (
-              <p className="text-sm text-muted-foreground mt-1">{stop.description}</p>
-            )}
-            {stop.tips && (
-              <p className="text-xs mt-2 bg-accent/50 p-2 rounded italic">💡 {stop.tips}</p>
-            )}
-            {stop.travelTimeFromPrev && (
-              <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Car className="w-3 h-3" />
-                {stop.travelTimeFromPrev} min
-                {stop.travelDistanceFromPrev && ` • ${stop.travelDistanceFromPrev} km`}
-              </div>
-            )}
-          </div>
-          <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {onEdit && (
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
-                <GripVertical className="w-3.5 h-3.5" />
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-destructive"
-              onClick={() => deleteMutation.mutate({ id: stop.id })}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
-          </div>
+        ) : null}
+      </td>
+      <td className="px-3 py-2.5 align-top">
+        <div className="flex items-center gap-2">
+          <Badge className={`text-xs border shrink-0 ${colorClass}`}>
+            <Icon className="w-3 h-3 mr-1" />
+            {stop.category.replace("must-", "")}
+          </Badge>
+          <span className="font-medium">{stop.title}</span>
         </div>
-      </CardContent>
-    </Card>
+        {stop.address && (
+          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+            <MapPin className="w-3 h-3" />
+            {stop.address}
+          </p>
+        )}
+        {stop.description && <p className="text-xs text-muted-foreground mt-1">{stop.description}</p>}
+        {stop.tips && (
+          <p className="text-xs mt-1.5 bg-accent/50 p-1.5 rounded italic md:hidden">💡 {stop.tips}</p>
+        )}
+      </td>
+      <td className="px-3 py-2.5 align-top hidden md:table-cell max-w-[220px]">
+        {stop.tips ? (
+          <p className="text-xs italic text-muted-foreground">💡 {stop.tips}</p>
+        ) : (
+          <span className="text-xs text-muted-foreground/50">—</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 align-top text-right">
+        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {onEdit && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
+              <Pencil className="w-3.5 h-3.5" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-destructive"
+            onClick={() => deleteMutation.mutate({ id: stop.id })}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -768,11 +824,11 @@ function AddStopDialog({
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-2">
               <Label>Start Time</Label>
-              <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <TimeSelect value={startTime} onChange={setStartTime} />
             </div>
             <div className="space-y-2">
               <Label>End Time</Label>
-              <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              <TimeSelect value={endTime} onChange={setEndTime} />
             </div>
             <div className="space-y-2">
               <Label>Duration (min)</Label>
@@ -904,11 +960,11 @@ function EditStopDialog({ stop, open, onOpenChange, refetch, days }: {
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-2">
               <Label>Start Time</Label>
-              <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <TimeSelect value={startTime} onChange={setStartTime} />
             </div>
             <div className="space-y-2">
               <Label>End Time</Label>
-              <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              <TimeSelect value={endTime} onChange={setEndTime} />
             </div>
             <div className="space-y-2">
               <Label>Duration (min)</Label>
@@ -936,82 +992,111 @@ function EditStopDialog({ stop, open, onOpenChange, refetch, days }: {
   );
 }
 
-// ============ AI SUGGESTION CARD ============
+// ============ AI DRAFT PREVIEW (IMPORT INTO TRIP) ============
 
-function AISuggestionCard({ suggestion, itineraryId, dayCount, refetch }: {
-  suggestion: any;
+function AIDraftPreview({ suggestions, itineraryId, days, open, onOpenChange, onImported }: {
+  suggestions: any[];
   itineraryId: number;
-  dayCount: number;
-  refetch: () => void;
+  days: number;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onImported: () => void;
 }) {
-  const [selectedDay, setSelectedDay] = useState("1");
-  const Icon = categoryIcons[suggestion.category] || MapPin;
-  const colorClass = categoryColors[suggestion.category] || "";
+  // Distribute suggestions evenly across the trip's days as an editable draft basis.
+  const [draft, setDraft] = useState<any[]>(() =>
+    suggestions.map((s, i) => ({ ...s, dayNumber: (i % days) + 1 }))
+  );
+  const [importing, setImporting] = useState(false);
 
-  const createMutation = trpc.stop.create.useMutation({
-    onSuccess: () => { refetch(); toast.success(`Added "${suggestion.title}" to Day ${selectedDay}`); },
-  });
-
+  const createMutation = trpc.stop.create.useMutation();
   const geocodeMutation = trpc.maps.geocode.useMutation();
 
-  const handleAdd = async () => {
-    let lat: string | undefined;
-    let lng: string | undefined;
-    let placeId: string | undefined;
-
-    if (suggestion.address) {
-      const geo = await geocodeMutation.mutateAsync({ address: suggestion.address });
-      if (geo) { lat = String(geo.lat); lng = String(geo.lng); placeId = geo.placeId; }
+  const handleImportAll = async () => {
+    setImporting(true);
+    const counters: Record<number, number> = {};
+    try {
+      for (const item of draft) {
+        const day = item.dayNumber;
+        counters[day] = (counters[day] || 0) + 1;
+        let lat: string | undefined, lng: string | undefined, placeId: string | undefined;
+        if (item.address) {
+          const geo = await geocodeMutation.mutateAsync({ address: item.address });
+          if (geo) { lat = String(geo.lat); lng = String(geo.lng); placeId = geo.placeId; }
+        }
+        await createMutation.mutateAsync({
+          itineraryId,
+          dayNumber: day,
+          orderIndex: counters[day] - 1,
+          title: item.title,
+          description: item.description,
+          category: item.category,
+          address: item.address,
+          duration: item.estimatedDuration,
+          tips: item.tips,
+          lat, lng, placeId,
+        });
+      }
+      toast.success(`Imported ${draft.length} stops into your trip`);
+      onImported();
+      onOpenChange(false);
+    } catch {
+      toast.error("Some stops failed to import");
+    } finally {
+      setImporting(false);
     }
-
-    createMutation.mutate({
-      itineraryId,
-      dayNumber: parseInt(selectedDay),
-      orderIndex: 99,
-      title: suggestion.title,
-      description: suggestion.description,
-      category: suggestion.category,
-      address: suggestion.address,
-      duration: suggestion.estimatedDuration,
-      tips: suggestion.tips,
-      lat, lng, placeId,
-    });
   };
 
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg bg-background border border-border/50">
-      <div className="flex-1">
-        <div className="flex items-center gap-2 mb-0.5">
-          <Badge className={`text-xs border ${colorClass}`}>
-            <Icon className="w-3 h-3 mr-1" />
-            {suggestion.category}
-          </Badge>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary" />
+            AI Draft — review before importing
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground -mt-2">
+          This is a starting point. Assign each stop to a day, then import it into your trip and refine it from there.
+        </p>
+        <div className="space-y-2">
+          {draft.map((item, i) => {
+            const Icon = categoryIcons[item.category] || MapPin;
+            const colorClass = categoryColors[item.category] || "";
+            return (
+              <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-background border border-border/50">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <Badge className={`text-xs border ${colorClass}`}>
+                      <Icon className="w-3 h-3 mr-1" />
+                      {item.category}
+                    </Badge>
+                  </div>
+                  <h4 className="font-medium text-sm">{item.title}</h4>
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{item.description}</p>
+                </div>
+                <Select
+                  value={String(item.dayNumber)}
+                  onValueChange={(v) => setDraft((prev) => prev.map((d, idx) => idx === i ? { ...d, dayNumber: parseInt(v) } : d))}
+                >
+                  <SelectTrigger className="w-24 h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: days }, (_, d) => (
+                      <SelectItem key={d + 1} value={String(d + 1)}>Day {d + 1}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            );
+          })}
         </div>
-        <h4 className="font-medium text-sm">{suggestion.title}</h4>
-        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{suggestion.description}</p>
-      </div>
-      <div className="flex items-center gap-2">
-        <Select value={selectedDay} onValueChange={setSelectedDay}>
-          <SelectTrigger className="w-20 h-8 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Array.from({ length: dayCount }, (_, i) => (
-              <SelectItem key={i + 1} value={String(i + 1)}>Day {i + 1}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={handleAdd}
-          disabled={createMutation.isPending}
-          className="h-8"
-        >
-          <Plus className="w-3.5 h-3.5" />
+        <Button className="w-full gap-2" onClick={handleImportAll} disabled={importing}>
+          <Check className="w-4 h-4" />
+          {importing ? "Importing..." : `Import all ${draft.length} stops into trip`}
         </Button>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
