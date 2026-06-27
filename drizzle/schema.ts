@@ -55,6 +55,9 @@ export const stops = mysqlTable("stops", {
   duration: int("duration"), // minutes
   travelTimeFromPrev: int("travelTimeFromPrev"), // minutes
   travelDistanceFromPrev: decimal("travelDistanceFromPrev", { precision: 10, scale: 2 }), // km
+  cost: decimal("cost", { precision: 10, scale: 2 }),
+  costCategory: mysqlEnum("costCategory", ["accommodation", "transport", "food", "activities", "shopping", "other"]),
+  stopDate: varchar("stopDate", { length: 10 }), // YYYY-MM-DD format
   notes: text("notes"),
   tips: text("tips"),
   rating: decimal("rating", { precision: 2, scale: 1 }),

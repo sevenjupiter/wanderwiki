@@ -15,6 +15,13 @@
       "when": 1781948167402,
       "tag": "0001_lucky_queen_noir",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1781952730162,
+      "tag": "0002_volatile_purple_man",
+      "breakpoints": true
     }
   ]
 }

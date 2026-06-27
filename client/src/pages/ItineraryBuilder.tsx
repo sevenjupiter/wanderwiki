@@ -1,248 +1,207 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Navbar } from "@/components/Navbar";
 import { trpc } from "@/lib/trpc";
-import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MapView } from "@/components/Map";
+import { useParams, useLocation } from "wouter";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { toast } from "sonner";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { getLoginUrl } from "@/const";
 import {
-  Plus, MapPin, Clock, Car, Camera, Compass, Star, Utensils,
-  GripVertical, Trash2, Sparkles, Route, Share2, Globe, Lock,
-  DollarSign, MessageSquare, ExternalLink, ChevronUp, ChevronDown,
-  Wand2, Send, Map as MapIcon, X, Pencil,
+  Plus, Trash2, MapPin, Calendar, Route, Sparkles, DollarSign,
+  Download, ExternalLink, Car, Camera, Compass, Star, Utensils,
+  Globe, MessageCircle, Send, ChevronDown, ChevronUp, Copy, X, Hotel
 } from "lucide-react";
-import { MapView } from "@/components/Map";
-import { Streamdown } from "streamdown";
+import { format, addDays, differenceInDays, parseISO } from "date-fns";
 
-const categoryIcons: Record<string, typeof Camera> = {
-  "must-see": Camera,
-  "must-do": Compass,
-  "must-try": Star,
-  "must-eat": Utensils,
-};
-
-const categoryColors: Record<string, string> = {
-  "must-see": "bg-[oklch(0.93_0.08_260)] text-[oklch(0.4_0.15_260)] border-[oklch(0.85_0.1_260)]",
-  "must-do": "bg-[oklch(0.93_0.08_160)] text-[oklch(0.35_0.12_160)] border-[oklch(0.85_0.1_160)]",
-  "must-try": "bg-[oklch(0.93_0.08_50)] text-[oklch(0.4_0.12_50)] border-[oklch(0.85_0.1_50)]",
-  "must-eat": "bg-[oklch(0.93_0.08_25)] text-[oklch(0.4_0.15_25)] border-[oklch(0.85_0.1_25)]",
-};
+// ============ MAIN PAGE ============
 
 export default function ItineraryBuilder() {
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const params = useParams<{ id: string }>();
-  const [, setLocation] = useLocation();
-  const { user, isAuthenticated, loading: authLoading } = useAuth();
-  const isNew = params.id === "new";
+  const [, navigate] = useLocation();
 
-  // New itinerary form state
-  const [newTitle, setNewTitle] = useState("");
-  const [newDestination, setNewDestination] = useState("");
-  const [newDuration, setNewDuration] = useState("");
-  const [newStyle, setNewStyle] = useState("");
-  const [newDescription, setNewDescription] = useState("");
-  const [newCurrency, setNewCurrency] = useState("USD");
-  const [newStartDate, setNewStartDate] = useState("");
-  const [newEndDate, setNewEndDate] = useState("");
-
-  const createMutation = trpc.itinerary.create.useMutation({
-    onSuccess: (data) => {
-      toast.success("Itinerary created!");
-      setLocation(`/itinerary/${data.id}`);
-    },
-    onError: () => toast.error("Failed to create itinerary"),
-  });
-
-  if (!authLoading && !isAuthenticated) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <Navbar />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <h2 className="text-2xl font-bold">Sign in to build itineraries</h2>
-            <a href={getLoginUrl()}>
-              <Button>Sign In</Button>
-            </a>
+        <main className="flex-1 py-8">
+          <div className="container max-w-6xl space-y-4">
+            <Skeleton className="h-8 w-1/3" />
+            <Skeleton className="h-[500px] w-full" />
           </div>
         </main>
       </div>
     );
   }
 
-  if (isNew) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <Navbar />
-        <main className="flex-1 py-12">
-          <div className="container max-w-2xl">
-            <h1 className="text-3xl font-bold tracking-tight mb-8">Create New Trip</h1>
-            <Card>
-              <CardContent className="p-6 space-y-5">
-                <div className="space-y-2">
-                  <Label htmlFor="title">Trip Title *</Label>
-                  <Input
-                    id="title"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    placeholder="e.g., Sicily Road Trip Adventure"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="destination">Destination *</Label>
-                  <Input
-                    id="destination"
-                    value={newDestination}
-                    onChange={(e) => setNewDestination(e.target.value)}
-                    placeholder="e.g., Sicily, Italy"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="startDate">Start Date</Label>
-                    <Input
-                      id="startDate"
-                      type="date"
-                      value={newStartDate}
-                      onChange={(e) => setNewStartDate(e.target.value)}
-                    />
+        <main className="flex-1 flex items-center justify-center">
+          <Card className="max-w-md w-full">
+            <CardContent className="p-8 text-center">
+              <h2 className="text-xl font-bold mb-2">Sign in to create itineraries</h2>
+              <p className="text-muted-foreground mb-4 text-sm">Plan, optimize, and share your trips.</p>
+              <a href={getLoginUrl()}>
+                <Button>Sign In</Button>
+              </a>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
+  if (params.id === "new") {
+    return <CreateItinerary />;
+  }
+
+  return <ItineraryEditor id={Number(params.id)} />;
+}
+
+// ============ CREATE ITINERARY ============
+
+function CreateItinerary() {
+  const [, navigate] = useLocation();
+  const [title, setTitle] = useState("");
+  const [destination, setDestination] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [travelStyle, setTravelStyle] = useState("");
+  const [currency, setCurrency] = useState("USD");
+  const [description, setDescription] = useState("");
+
+  const createMutation = trpc.itinerary.create.useMutation({
+    onSuccess: (data) => {
+      toast.success("Itinerary created!");
+      navigate(`/itinerary/${data.id}`);
+    },
+    onError: () => toast.error("Failed to create itinerary"),
+  });
+
+  const duration = startDate && endDate
+    ? differenceInDays(parseISO(endDate), parseISO(startDate)) + 1
+    : undefined;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title || !destination) {
+      toast.error("Title and destination are required");
+      return;
+    }
+    createMutation.mutate({
+      title,
+      destination,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      duration,
+      travelStyle: travelStyle || undefined,
+      currency,
+      description: description || undefined,
+    });
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      <Navbar />
+      <main className="flex-1 py-8">
+        <div className="container max-w-2xl">
+          <h1 className="text-2xl font-bold mb-6">Create New Trip</h1>
+          <Card>
+            <CardContent className="p-6">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Trip Title *</Label>
+                    <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g., Sicily Road Trip" />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="endDate">End Date</Label>
-                    <Input
-                      id="endDate"
-                      type="date"
-                      value={newEndDate}
-                      onChange={(e) => setNewEndDate(e.target.value)}
-                    />
+                  <div>
+                    <Label>Destination *</Label>
+                    <Input value={destination} onChange={e => setDestination(e.target.value)} placeholder="e.g., Sicily, Italy" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="duration">Duration (days)</Label>
-                    <Input
-                      id="duration"
-                      type="number"
-                      value={newDuration}
-                      onChange={(e) => setNewDuration(e.target.value)}
-                      placeholder="7"
-                    />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Start Date</Label>
+                    <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
                   </div>
-                  <div className="space-y-2">
+                  <div>
+                    <Label>End Date</Label>
+                    <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                  </div>
+                </div>
+                {duration && (
+                  <p className="text-sm text-muted-foreground">Duration: {duration} days</p>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
                     <Label>Travel Style</Label>
-                    <Select value={newStyle} onValueChange={setNewStyle}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select style" />
-                      </SelectTrigger>
+                    <Select value={travelStyle} onValueChange={setTravelStyle}>
+                      <SelectTrigger><SelectValue placeholder="Select style" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="solo">Solo</SelectItem>
                         <SelectItem value="couple">Couple</SelectItem>
                         <SelectItem value="family">Family</SelectItem>
                         <SelectItem value="group">Group</SelectItem>
-                        <SelectItem value="backpacker">Backpacker</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Currency</Label>
+                    <Select value={currency} onValueChange={setCurrency}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="USD">USD ($)</SelectItem>
+                        <SelectItem value="EUR">EUR (€)</SelectItem>
+                        <SelectItem value="GBP">GBP (£)</SelectItem>
+                        <SelectItem value="JPY">JPY (¥)</SelectItem>
+                        <SelectItem value="SGD">SGD (S$)</SelectItem>
+                        <SelectItem value="AUD">AUD (A$)</SelectItem>
+                        <SelectItem value="NZD">NZD (NZ$)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Currency</Label>
-                  <Select value={newCurrency} onValueChange={setNewCurrency}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="USD">USD ($)</SelectItem>
-                      <SelectItem value="EUR">EUR (€)</SelectItem>
-                      <SelectItem value="GBP">GBP (£)</SelectItem>
-                      <SelectItem value="JPY">JPY (¥)</SelectItem>
-                      <SelectItem value="AUD">AUD (A$)</SelectItem>
-                      <SelectItem value="SGD">SGD (S$)</SelectItem>
-                      <SelectItem value="MYR">MYR (RM)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div>
+                  <Label>Description (optional)</Label>
+                  <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Brief description..." rows={2} />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={newDescription}
-                    onChange={(e) => setNewDescription(e.target.value)}
-                    placeholder="Brief description of your trip..."
-                    rows={3}
-                  />
-                </div>
-                <Button
-                  className="w-full"
-                  onClick={() => {
-                    if (!newTitle || !newDestination) {
-                      toast.error("Title and destination are required");
-                      return;
-                    }
-                    createMutation.mutate({
-                      title: newTitle,
-                      destination: newDestination,
-                      duration: newDuration ? parseInt(newDuration) : undefined,
-                      travelStyle: newStyle || undefined,
-                      description: newDescription || undefined,
-                      currency: newCurrency,
-                      startDate: newStartDate ? new Date(newStartDate) : undefined,
-                      endDate: newEndDate ? new Date(newEndDate) : undefined,
-                    });
-                  }}
-                  disabled={createMutation.isPending}
-                >
+                <Button type="submit" className="w-full" disabled={createMutation.isPending}>
                   {createMutation.isPending ? "Creating..." : "Create Itinerary"}
                 </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  return <ItineraryEditor id={parseInt(params.id || "0")} />;
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+    </div>
+  );
 }
 
 // ============ ITINERARY EDITOR ============
 
 function ItineraryEditor({ id }: { id: number }) {
-  const { data, isLoading, refetch } = trpc.itinerary.getById.useQuery({ id }, { enabled: id > 0 });
+  const { data, isLoading, refetch } = trpc.itinerary.getById.useQuery({ id });
   const [activeTab, setActiveTab] = useState("itinerary");
-  const [addStopOpen, setAddStopOpen] = useState(false);
-  const [addStopDay, setAddStopDay] = useState(1);
-
-  const updateMutation = trpc.itinerary.update.useMutation({
-    onSuccess: () => {
-      refetch();
-      toast.success("Saved!");
-    },
-  });
-
-  const optimizeMutation = trpc.maps.optimizeRoute.useMutation({
-    onSuccess: (data) => {
-      refetch();
-      toast.success(data.message);
-    },
-    onError: () => toast.error("Route optimization failed"),
-  });
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <Navbar />
         <main className="flex-1 py-8">
-          <div className="container space-y-6">
-            <Skeleton className="h-10 w-1/2" />
-            <Skeleton className="h-[600px] w-full rounded-xl" />
+          <div className="container max-w-6xl space-y-4">
+            <Skeleton className="h-8 w-1/3" />
+            <Skeleton className="h-[500px] w-full" />
           </div>
         </main>
       </div>
@@ -254,131 +213,101 @@ function ItineraryEditor({ id }: { id: number }) {
       <div className="min-h-screen flex flex-col bg-background">
         <Navbar />
         <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold">Itinerary not found</h2>
-          </div>
+          <p className="text-muted-foreground">Itinerary not found.</p>
         </main>
       </div>
     );
   }
 
-  const days = data.duration || Math.max(...(data.stops?.map(s => s.dayNumber) || [1]), 1);
-  const stopsByDay: Record<number, typeof data.stops> = {};
-  data.stops?.forEach((stop) => {
-    if (!stopsByDay[stop.dayNumber]) stopsByDay[stop.dayNumber] = [];
-    stopsByDay[stop.dayNumber].push(stop);
-  });
+  const startDate = data.startDate ? new Date(data.startDate) : null;
+  const dayCount = data.duration || 7;
+
+  // Generate day labels with actual dates
+  const getDayLabel = (dayNum: number) => {
+    if (startDate) {
+      const date = addDays(startDate, dayNum - 1);
+      return `${format(date, "EEE, MMM d")}`;
+    }
+    return `Day ${dayNum}`;
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
-
       <main className="flex-1 py-6">
-        <div className="container">
+        <div className="container max-w-6xl">
           {/* Header */}
-          <div className="flex items-start justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{data.title}</h1>
-              <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5" />
-                  {data.destination}
-                </span>
-                {data.duration && (
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    {data.duration} days
-                  </span>
+              <h1 className="text-xl font-bold">{data.title}</h1>
+              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <MapPin className="w-3.5 h-3.5" />
+                {data.destination}
+                {startDate && (
+                  <>
+                    <span className="mx-1">•</span>
+                    <Calendar className="w-3.5 h-3.5" />
+                    {format(startDate, "MMM d")} - {data.endDate ? format(new Date(data.endDate), "MMM d, yyyy") : ""}
+                  </>
                 )}
-                <Badge variant="outline" className="capitalize">{data.status}</Badge>
-              </div>
+                <span className="mx-1">•</span>
+                {dayCount} days
+              </p>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  updateMutation.mutate({ id, isPublic: !data.isPublic });
-                }}
-              >
-                {data.isPublic ? <Globe className="w-4 h-4 mr-1" /> : <Lock className="w-4 h-4 mr-1" />}
-                {data.isPublic ? "Public" : "Private"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.origin}/shared/${data.shareToken}`);
-                  toast.success("Share link copied!");
-                }}
-              >
-                <Share2 className="w-4 h-4 mr-1" />
-                Share
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => optimizeMutation.mutate({ itineraryId: id })}
-                disabled={optimizeMutation.isPending}
-                className="gap-1"
-              >
-                <Route className="w-4 h-4" />
-                {optimizeMutation.isPending ? "Optimizing..." : "Optimize Route"}
-              </Button>
+              <ExportButton itinerary={data} />
             </div>
           </div>
 
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-6">
+            <TabsList className="mb-4">
               <TabsTrigger value="itinerary" className="gap-1.5">
-                <MapPin className="w-4 h-4" />
+                <Calendar className="w-3.5 h-3.5" />
                 Itinerary
               </TabsTrigger>
               <TabsTrigger value="map" className="gap-1.5">
-                <MapIcon className="w-4 h-4" />
+                <MapPin className="w-3.5 h-3.5" />
                 Map
               </TabsTrigger>
               <TabsTrigger value="budget" className="gap-1.5">
-                <DollarSign className="w-4 h-4" />
+                <DollarSign className="w-3.5 h-3.5" />
                 Budget
               </TabsTrigger>
               <TabsTrigger value="booking" className="gap-1.5">
-                <ExternalLink className="w-4 h-4" />
+                <Hotel className="w-3.5 h-3.5" />
                 Booking
               </TabsTrigger>
               <TabsTrigger value="ai" className="gap-1.5">
-                <Sparkles className="w-4 h-4" />
-                AI Assistant
+                <Sparkles className="w-3.5 h-3.5" />
+                AI
               </TabsTrigger>
             </TabsList>
 
-            {/* Itinerary Tab */}
             <TabsContent value="itinerary">
               <ItineraryTab
                 itineraryId={id}
-                days={days}
-                stopsByDay={stopsByDay}
-                destination={data.destination}
+                stops={data.stops || []}
+                dayCount={dayCount}
+                startDate={startDate}
+                getDayLabel={getDayLabel}
+                currency={data.currency || "USD"}
                 refetch={refetch}
               />
             </TabsContent>
 
-            {/* Map Tab */}
             <TabsContent value="map">
-              <MapTab stops={data.stops || []} />
+              <MapTab stops={data.stops || []} dayCount={dayCount} getDayLabel={getDayLabel} />
             </TabsContent>
 
-            {/* Budget Tab */}
             <TabsContent value="budget">
-              <BudgetTab itineraryId={id} budget={data.budget || []} currency={data.currency || "USD"} refetch={refetch} />
+              <BudgetSummaryTab stops={data.stops || []} currency={data.currency || "USD"} getDayLabel={getDayLabel} />
             </TabsContent>
 
-            {/* Booking Tab */}
             <TabsContent value="booking">
-              <BookingTab destination={data.destination} />
+              <BookingTab destination={data.destination} startDate={data.startDate} endDate={data.endDate} />
             </TabsContent>
 
-            {/* AI Tab */}
             <TabsContent value="ai">
               <AITab itineraryId={id} destination={data.destination} stops={data.stops || []} />
             </TabsContent>
@@ -389,644 +318,399 @@ function ItineraryEditor({ id }: { id: number }) {
   );
 }
 
-// ============ ITINERARY TAB ============
+// ============ ITINERARY TAB (TABLE-BASED) ============
 
 function ItineraryTab({
-  itineraryId, days, stopsByDay, destination, refetch,
+  itineraryId, stops, dayCount, startDate, getDayLabel, currency, refetch
 }: {
   itineraryId: number;
-  days: number;
-  stopsByDay: Record<number, any[]>;
-  destination: string;
+  stops: any[];
+  dayCount: number;
+  startDate: Date | null;
+  getDayLabel: (day: number) => string;
+  currency: string;
   refetch: () => void;
 }) {
-  const [addStopDay, setAddStopDay] = useState(1);
-  const [addStopOpen, setAddStopOpen] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [editStop, setEditStop] = useState<any>(null);
+  const [expandedDay, setExpandedDay] = useState<number>(1);
+  const [showAddRow, setShowAddRow] = useState<number | null>(null);
 
-  const suggestMutation = trpc.ai.suggestStops.useMutation({
-    onSuccess: () => toast.success("AI suggestions ready!"),
-    onError: () => toast.error("Failed to get suggestions"),
-  });
-
-  const reorderMutation = trpc.stop.reorder.useMutation({
-    onSuccess: () => { refetch(); toast.success("Reordered!"); },
-  });
-
-  const moveStop = (stop: any, direction: "up" | "down", dayStops: any[]) => {
-    const sorted = [...dayStops].sort((a, b) => a.orderIndex - b.orderIndex);
-    const idx = sorted.findIndex(s => s.id === stop.id);
-    if (direction === "up" && idx > 0) {
-      const orders = sorted.map((s, i) => ({ id: s.id, dayNumber: s.dayNumber, orderIndex: i }));
-      [orders[idx], orders[idx - 1]] = [orders[idx - 1], orders[idx]];
-      orders.forEach((o, i) => o.orderIndex = i);
-      reorderMutation.mutate({ itineraryId, orders });
-    } else if (direction === "down" && idx < sorted.length - 1) {
-      const orders = sorted.map((s, i) => ({ id: s.id, dayNumber: s.dayNumber, orderIndex: i }));
-      [orders[idx], orders[idx + 1]] = [orders[idx + 1], orders[idx]];
-      orders.forEach((o, i) => o.orderIndex = i);
-      reorderMutation.mutate({ itineraryId, orders });
-    }
-  };
-
-  const filterStops = (dayStops: any[]) => {
-    if (categoryFilter === "all") return dayStops;
-    return dayStops.filter(s => s.category === categoryFilter);
-  };
+  // Group stops by day and sort by startTime
+  const stopsByDay = useMemo(() => {
+    const grouped: Record<number, any[]> = {};
+    for (let i = 1; i <= dayCount; i++) grouped[i] = [];
+    stops.forEach(s => {
+      const day = s.dayNumber || 1;
+      if (!grouped[day]) grouped[day] = [];
+      grouped[day].push(s);
+    });
+    // Sort each day by startTime
+    Object.values(grouped).forEach(dayStops => {
+      dayStops.sort((a, b) => {
+        if (!a.startTime && !b.startTime) return a.orderIndex - b.orderIndex;
+        if (!a.startTime) return 1;
+        if (!b.startTime) return -1;
+        return a.startTime.localeCompare(b.startTime);
+      });
+    });
+    return grouped;
+  }, [stops, dayCount]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3 flex-wrap">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => suggestMutation.mutate({ destination, duration: days })}
-          disabled={suggestMutation.isPending}
-          className="gap-1"
-        >
-          <Wand2 className="w-4 h-4" />
-          {suggestMutation.isPending ? "Getting suggestions..." : "AI Suggest Stops"}
-        </Button>
-        <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-xs text-muted-foreground">Filter:</span>
-          {["all", "must-see", "must-do", "must-try", "must-eat"].map((cat) => {
-            const Icon = cat === "all" ? MapPin : categoryIcons[cat] || MapPin;
-            return (
-              <Button
-                key={cat}
-                variant={categoryFilter === cat ? "default" : "outline"}
-                size="sm"
-                className="h-7 px-2 text-xs gap-1"
-                onClick={() => setCategoryFilter(cat)}
-              >
-                <Icon className="w-3 h-3" />
-                {cat === "all" ? "All" : cat.replace("must-", "")}
-              </Button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* AI Suggestions */}
-      {suggestMutation.data && suggestMutation.data.length > 0 && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-primary" />
-              AI Suggestions for {destination}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {suggestMutation.data.map((suggestion: any, i: number) => (
-              <AISuggestionCard
-                key={i}
-                suggestion={suggestion}
-                itineraryId={itineraryId}
-                dayCount={days}
-                refetch={refetch}
-              />
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Day-by-Day Stops */}
-      {Array.from({ length: days }, (_, i) => i + 1).map((day) => {
+    <div className="space-y-3">
+      {Array.from({ length: dayCount }, (_, i) => i + 1).map(day => {
         const dayStops = stopsByDay[day] || [];
-        const totalTravelTime = dayStops.reduce((sum: number, s: any) => sum + (s.travelTimeFromPrev || 0), 0);
-        const totalDuration = dayStops.reduce((sum: number, s: any) => sum + (s.duration || 0), 0);
-        const stopCount = dayStops.length;
+        const isExpanded = expandedDay === day;
+        const dayTotal = dayStops.reduce((sum, s) => sum + (Number(s.cost) || 0), 0);
 
         return (
-        <div key={day} className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
+          <Card key={day} className={isExpanded ? "border-primary/30" : ""}>
+            <div
+              className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-accent/30 transition-colors"
+              onClick={() => setExpandedDay(isExpanded ? 0 : day)}
+            >
+              <div className="flex items-center gap-3">
                 <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">
                   {day}
                 </div>
-                Day {day}
-              </h3>
-              {stopCount > 0 && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{stopCount} stops</span>
-                  {totalDuration > 0 && <span>• {Math.round(totalDuration / 60)}h activity</span>}
-                  {totalTravelTime > 0 && (
-                    <span className="flex items-center gap-0.5">
-                      <Car className="w-3 h-3" />
-                      {totalTravelTime} min travel
-                    </span>
-                  )}
+                <div>
+                  <span className="font-medium text-sm">{getDayLabel(day)}</span>
+                  <span className="text-xs text-muted-foreground ml-2">
+                    {dayStops.length} stop{dayStops.length !== 1 ? "s" : ""}
+                    {dayTotal > 0 && ` • ${currency} ${dayTotal.toFixed(0)}`}
+                  </span>
                 </div>
-              )}
+              </div>
+              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => { setAddStopDay(day); setAddStopOpen(true); }}
-              className="gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Stop
-            </Button>
-          </div>
 
-          <div className="space-y-2 ml-3.5 border-l-2 border-border/70 pl-5">
-            {filterStops(stopsByDay[day] || [])
-              .sort((a: any, b: any) => a.orderIndex - b.orderIndex)
-              .map((stop: any) => (
-                <StopCard
-                  key={stop.id}
-                  stop={stop}
-                  refetch={refetch}
-                  onEdit={() => setEditStop(stop)}
-                  onMoveUp={() => moveStop(stop, "up", stopsByDay[day] || [])}
-                  onMoveDown={() => moveStop(stop, "down", stopsByDay[day] || [])}
-                />
-              ))}
-            {filterStops(stopsByDay[day] || []).length === 0 && (
-              <p className="text-sm text-muted-foreground py-4 italic">
-                {categoryFilter !== "all" ? `No ${categoryFilter} stops for this day.` : "No stops added yet for this day."}
-              </p>
+            {isExpanded && (
+              <CardContent className="px-4 pb-4 pt-0">
+                {/* Table header */}
+                <div className="grid grid-cols-[80px_1fr_1fr_100px_100px_80px_40px] gap-2 text-xs font-medium text-muted-foreground border-b pb-2 mb-2">
+                  <span>Time</span>
+                  <span>Stop</span>
+                  <span>Location</span>
+                  <span>Category</span>
+                  <span>Cost</span>
+                  <span>Notes</span>
+                  <span></span>
+                </div>
+
+                {/* Existing stops */}
+                {dayStops.map(stop => (
+                  <StopRow key={stop.id} stop={stop} currency={currency} refetch={refetch} />
+                ))}
+
+                {/* Add stop row */}
+                {showAddRow === day ? (
+                  <AddStopRow
+                    itineraryId={itineraryId}
+                    dayNumber={day}
+                    orderIndex={dayStops.length}
+                    startDate={startDate}
+                    currency={currency}
+                    onDone={() => { setShowAddRow(null); refetch(); }}
+                    onCancel={() => setShowAddRow(null)}
+                  />
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowAddRow(day)}
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add stop
+                  </Button>
+                )}
+              </CardContent>
             )}
-          </div>
-        </div>
+          </Card>
         );
       })}
-
-      {/* Add Stop Dialog */}
-      <AddStopDialog
-        open={addStopOpen}
-        onOpenChange={setAddStopOpen}
-        itineraryId={itineraryId}
-        dayNumber={addStopDay}
-        existingStopCount={(stopsByDay[addStopDay] || []).length}
-        refetch={refetch}
-      />
-
-      {/* Edit Stop Dialog */}
-      {editStop && (
-        <EditStopDialog
-          stop={editStop}
-          open={!!editStop}
-          onOpenChange={(v: boolean) => { if (!v) setEditStop(null); }}
-          refetch={refetch}
-          days={days}
-        />
-      )}
     </div>
   );
 }
 
-// ============ STOP CARD ============
+// ============ STOP ROW ============
 
-function StopCard({ stop, refetch, onEdit, onMoveUp, onMoveDown }: {
-  stop: any;
-  refetch: () => void;
-  onEdit?: () => void;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-}) {
-  const Icon = categoryIcons[stop.category] || MapPin;
-  const colorClass = categoryColors[stop.category] || "";
+function StopRow({ stop, currency, refetch }: { stop: any; currency: string; refetch: () => void }) {
   const deleteMutation = trpc.stop.delete.useMutation({
     onSuccess: () => { refetch(); toast.success("Stop removed"); },
   });
 
+  const categoryIcons: Record<string, typeof Camera> = {
+    "must-see": Camera,
+    "must-do": Compass,
+    "must-try": Star,
+    "must-eat": Utensils,
+  };
+  const Icon = categoryIcons[stop.category] || MapPin;
+
   return (
-    <Card className="relative group">
-      <div className="absolute -left-[27px] top-5 w-3 h-3 rounded-full bg-background border-2 border-primary/70" />
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          {/* Reorder buttons */}
-          <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onMoveUp}>
-              <ChevronUp className="w-3 h-3" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onMoveDown}>
-              <ChevronDown className="w-3 h-3" />
-            </Button>
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <Badge className={`text-xs border ${colorClass}`}>
-                <Icon className="w-3 h-3 mr-1" />
-                {stop.category}
-              </Badge>
-              {stop.startTime && (
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {stop.startTime}{stop.endTime && ` - ${stop.endTime}`}
-                </span>
-              )}
-            </div>
-            <h4 className="font-medium">{stop.title}</h4>
-            {stop.address && (
-              <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                <MapPin className="w-3 h-3" />
-                {stop.address}
-              </p>
-            )}
-            {stop.description && (
-              <p className="text-sm text-muted-foreground mt-1">{stop.description}</p>
-            )}
-            {stop.tips && (
-              <p className="text-xs mt-2 bg-accent/50 p-2 rounded italic">💡 {stop.tips}</p>
-            )}
-            {stop.travelTimeFromPrev && (
-              <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Car className="w-3 h-3" />
-                {stop.travelTimeFromPrev} min
-                {stop.travelDistanceFromPrev && ` • ${stop.travelDistanceFromPrev} km`}
-              </div>
-            )}
-          </div>
-          <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {onEdit && (
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
-                <GripVertical className="w-3.5 h-3.5" />
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-destructive"
-              onClick={() => deleteMutation.mutate({ id: stop.id })}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="grid grid-cols-[80px_1fr_1fr_100px_100px_80px_40px] gap-2 items-center py-2 border-b border-border/30 text-sm hover:bg-accent/20 transition-colors">
+      <span className="text-xs text-muted-foreground">
+        {stop.startTime || "—"}
+        {stop.endTime && <span className="block text-[10px]">to {stop.endTime}</span>}
+      </span>
+      <div className="flex items-center gap-1.5 min-w-0">
+        <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <span className="truncate font-medium">{stop.title}</span>
+      </div>
+      <span className="text-xs text-muted-foreground truncate">{stop.address || "—"}</span>
+      <Badge variant="outline" className="text-[10px] h-5 w-fit capitalize">{stop.category}</Badge>
+      <span className="text-xs">
+        {stop.cost ? `${currency} ${Number(stop.cost).toFixed(0)}` : "—"}
+      </span>
+      <span className="text-xs text-muted-foreground truncate">{stop.notes || "—"}</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+        onClick={() => deleteMutation.mutate({ id: stop.id })}
+      >
+        <Trash2 className="w-3 h-3" />
+      </Button>
+    </div>
   );
 }
 
-// ============ ADD STOP DIALOG ============
+// ============ ADD STOP ROW ============
 
-function AddStopDialog({
-  open, onOpenChange, itineraryId, dayNumber, existingStopCount, refetch,
+const TIME_OPTIONS = (() => {
+  const opts: string[] = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 15) {
+      opts.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+    }
+  }
+  return opts;
+})();
+
+function AddStopRow({
+  itineraryId, dayNumber, orderIndex, startDate, currency, onDone, onCancel
 }: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
   itineraryId: number;
   dayNumber: number;
-  existingStopCount: number;
-  refetch: () => void;
+  orderIndex: number;
+  startDate: Date | null;
+  currency: string;
+  onDone: () => void;
+  onCancel: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [address, setAddress] = useState("");
-  const [category, setCategory] = useState<string>("must-see");
-  const [description, setDescription] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [duration, setDuration] = useState("");
-  const [tips, setTips] = useState("");
+  const [category, setCategory] = useState<string>("must-see");
+  const [cost, setCost] = useState("");
+  const [costCategory, setCostCategory] = useState<string>("");
+  const [notes, setNotes] = useState("");
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
+  const [placeId, setPlaceId] = useState("");
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const addressRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<google.maps.places.AutocompleteService | null>(null);
+
+  // Initialize Places autocomplete service
+  useEffect(() => {
+    const initService = () => {
+      if (window.google?.maps?.places) {
+        autocompleteRef.current = new google.maps.places.AutocompleteService();
+      }
+    };
+    if (window.google?.maps?.places) {
+      initService();
+    } else {
+      const interval = setInterval(() => {
+        if (window.google?.maps?.places) {
+          initService();
+          clearInterval(interval);
+        }
+      }, 500);
+      return () => clearInterval(interval);
+    }
+  }, []);
+
+  const handleAddressChange = (value: string) => {
+    setAddress(value);
+    if (value.length > 2 && autocompleteRef.current) {
+      autocompleteRef.current.getPlacePredictions(
+        { input: value },
+        (predictions, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
+            setSuggestions(predictions);
+            setShowSuggestions(true);
+          } else {
+            setSuggestions([]);
+            setShowSuggestions(false);
+          }
+        }
+      );
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSelectPlace = (prediction: any) => {
+    setAddress(prediction.description);
+    setPlaceId(prediction.place_id);
+    setShowSuggestions(false);
+
+    // Get lat/lng from geocoding
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ placeId: prediction.place_id }, (results, status) => {
+      if (status === "OK" && results && results[0]) {
+        setLat(String(results[0].geometry.location.lat()));
+        setLng(String(results[0].geometry.location.lng()));
+        // Auto-fill title if empty
+        if (!title) {
+          setTitle(prediction.structured_formatting?.main_text || prediction.description.split(",")[0]);
+        }
+      }
+    });
+  };
 
   const createMutation = trpc.stop.create.useMutation({
-    onSuccess: () => {
-      refetch();
-      toast.success("Stop added!");
-      onOpenChange(false);
-      resetForm();
-    },
+    onSuccess: () => { toast.success("Stop added"); onDone(); },
     onError: () => toast.error("Failed to add stop"),
   });
 
-  const geocodeMutation = trpc.maps.geocode.useMutation();
-
-  const resetForm = () => {
-    setTitle(""); setAddress(""); setCategory("must-see");
-    setDescription(""); setStartTime(""); setEndTime("");
-    setDuration(""); setTips("");
-  };
-
-  const handleCreate = async () => {
+  const handleAdd = () => {
     if (!title) { toast.error("Title is required"); return; }
-
-    let lat: string | undefined;
-    let lng: string | undefined;
-    let placeId: string | undefined;
-
-    if (address) {
-      const geo = await geocodeMutation.mutateAsync({ address });
-      if (geo) {
-        lat = String(geo.lat);
-        lng = String(geo.lng);
-        placeId = geo.placeId;
-      }
-    }
-
+    const stopDate = startDate ? format(addDays(startDate, dayNumber - 1), "yyyy-MM-dd") : undefined;
     createMutation.mutate({
       itineraryId,
       dayNumber,
-      orderIndex: existingStopCount,
+      orderIndex,
       title,
       address: address || undefined,
-      category: category as any,
-      description: description || undefined,
+      lat: lat || undefined,
+      lng: lng || undefined,
+      placeId: placeId || undefined,
       startTime: startTime || undefined,
       endTime: endTime || undefined,
-      duration: duration ? parseInt(duration) : undefined,
-      tips: tips || undefined,
-      lat,
-      lng,
-      placeId,
-    });
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add Stop — Day {dayNumber}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Title *</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., Colosseum" />
-          </div>
-          <div className="space-y-2">
-            <Label>Address / Location</Label>
-            <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g., Piazza del Colosseo, Rome" />
-          </div>
-          <div className="space-y-2">
-            <Label>Category</Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="must-see">🏛️ Must-See</SelectItem>
-                <SelectItem value="must-do">🎯 Must-Do</SelectItem>
-                <SelectItem value="must-try">⭐ Must-Try</SelectItem>
-                <SelectItem value="must-eat">🍽️ Must-Eat</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-2">
-              <Label>Start Time</Label>
-              <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>End Time</Label>
-              <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Duration (min)</Label>
-              <Input type="number" value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="60" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Description</Label>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description..." rows={2} />
-          </div>
-          <div className="space-y-2">
-            <Label>Tips</Label>
-            <Input value={tips} onChange={(e) => setTips(e.target.value)} placeholder="e.g., Book tickets online to skip the queue" />
-          </div>
-          <Button
-            className="w-full"
-            onClick={handleCreate}
-            disabled={createMutation.isPending || geocodeMutation.isPending}
-          >
-            {createMutation.isPending || geocodeMutation.isPending ? "Adding..." : "Add Stop"}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ============ EDIT STOP DIALOG ============
-
-function EditStopDialog({ stop, open, onOpenChange, refetch, days }: {
-  stop: any;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  refetch: () => void;
-  days: number;
-}) {
-  const [title, setTitle] = useState(stop.title || "");
-  const [address, setAddress] = useState(stop.address || "");
-  const [category, setCategory] = useState(stop.category || "must-see");
-  const [description, setDescription] = useState(stop.description || "");
-  const [startTime, setStartTime] = useState(stop.startTime || "");
-  const [endTime, setEndTime] = useState(stop.endTime || "");
-  const [duration, setDuration] = useState(stop.duration ? String(stop.duration) : "");
-  const [tips, setTips] = useState(stop.tips || "");
-  const [dayNumber, setDayNumber] = useState(String(stop.dayNumber));
-
-  const updateMutation = trpc.stop.update.useMutation({
-    onSuccess: () => {
-      refetch();
-      toast.success("Stop updated!");
-      onOpenChange(false);
-    },
-    onError: () => toast.error("Failed to update stop"),
-  });
-
-  const geocodeMutation = trpc.maps.geocode.useMutation();
-
-  const handleSave = async () => {
-    if (!title) { toast.error("Title is required"); return; }
-
-    let lat: string | undefined;
-    let lng: string | undefined;
-    let placeId: string | undefined;
-
-    if (address && address !== stop.address) {
-      const geo = await geocodeMutation.mutateAsync({ address });
-      if (geo) {
-        lat = String(geo.lat);
-        lng = String(geo.lng);
-        placeId = geo.placeId;
-      }
-    }
-
-    updateMutation.mutate({
-      id: stop.id,
-      title,
-      address: address || undefined,
       category: category as any,
-      description: description || undefined,
-      startTime: startTime || undefined,
-      endTime: endTime || undefined,
-      duration: duration ? parseInt(duration) : undefined,
-      tips: tips || undefined,
-      dayNumber: parseInt(dayNumber),
-      ...(lat && lng ? { lat, lng, placeId } : {}),
+      cost: cost || undefined,
+      costCategory: costCategory as any || undefined,
+      stopDate,
+      notes: notes || undefined,
     });
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Edit Stop</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Title *</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Address / Location</Label>
-            <Input value={address} onChange={(e) => setAddress(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="must-see">Must-See</SelectItem>
-                  <SelectItem value="must-do">Must-Do</SelectItem>
-                  <SelectItem value="must-try">Must-Try</SelectItem>
-                  <SelectItem value="must-eat">Must-Eat</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Day</Label>
-              <Select value={dayNumber} onValueChange={setDayNumber}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: days }, (_, i) => (
-                    <SelectItem key={i + 1} value={String(i + 1)}>Day {i + 1}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-2">
-              <Label>Start Time</Label>
-              <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>End Time</Label>
-              <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Duration (min)</Label>
-              <Input type="number" value={duration} onChange={(e) => setDuration(e.target.value)} />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Description</Label>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
-          </div>
-          <div className="space-y-2">
-            <Label>Tips</Label>
-            <Input value={tips} onChange={(e) => setTips(e.target.value)} />
-          </div>
-          <Button
-            className="w-full"
-            onClick={handleSave}
-            disabled={updateMutation.isPending || geocodeMutation.isPending}
-          >
-            {updateMutation.isPending ? "Saving..." : "Save Changes"}
-          </Button>
+    <div className="border border-dashed border-primary/30 rounded-lg p-3 mt-2 space-y-3 bg-primary/5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <Label className="text-xs">Stop Name *</Label>
+          <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g., Colosseum" className="h-8 text-sm" />
         </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ============ AI SUGGESTION CARD ============
-
-function AISuggestionCard({ suggestion, itineraryId, dayCount, refetch }: {
-  suggestion: any;
-  itineraryId: number;
-  dayCount: number;
-  refetch: () => void;
-}) {
-  const [selectedDay, setSelectedDay] = useState("1");
-  const Icon = categoryIcons[suggestion.category] || MapPin;
-  const colorClass = categoryColors[suggestion.category] || "";
-
-  const createMutation = trpc.stop.create.useMutation({
-    onSuccess: () => { refetch(); toast.success(`Added "${suggestion.title}" to Day ${selectedDay}`); },
-  });
-
-  const geocodeMutation = trpc.maps.geocode.useMutation();
-
-  const handleAdd = async () => {
-    let lat: string | undefined;
-    let lng: string | undefined;
-    let placeId: string | undefined;
-
-    if (suggestion.address) {
-      const geo = await geocodeMutation.mutateAsync({ address: suggestion.address });
-      if (geo) { lat = String(geo.lat); lng = String(geo.lng); placeId = geo.placeId; }
-    }
-
-    createMutation.mutate({
-      itineraryId,
-      dayNumber: parseInt(selectedDay),
-      orderIndex: 99,
-      title: suggestion.title,
-      description: suggestion.description,
-      category: suggestion.category,
-      address: suggestion.address,
-      duration: suggestion.estimatedDuration,
-      tips: suggestion.tips,
-      lat, lng, placeId,
-    });
-  };
-
-  return (
-    <div className="flex items-center gap-3 p-3 rounded-lg bg-background border border-border/50">
-      <div className="flex-1">
-        <div className="flex items-center gap-2 mb-0.5">
-          <Badge className={`text-xs border ${colorClass}`}>
-            <Icon className="w-3 h-3 mr-1" />
-            {suggestion.category}
-          </Badge>
+        <div className="relative">
+          <Label className="text-xs">Location (auto-suggest)</Label>
+          <Input
+            ref={addressRef}
+            value={address}
+            onChange={e => handleAddressChange(e.target.value)}
+            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            placeholder="Start typing an address..."
+            className="h-8 text-sm"
+          />
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+              {suggestions.map((s, i) => (
+                <div
+                  key={i}
+                  className="px-3 py-2 text-sm cursor-pointer hover:bg-accent transition-colors"
+                  onMouseDown={() => handleSelectPlace(s)}
+                >
+                  <p className="font-medium text-xs">{s.structured_formatting?.main_text}</p>
+                  <p className="text-[10px] text-muted-foreground">{s.structured_formatting?.secondary_text}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        <h4 className="font-medium text-sm">{suggestion.title}</h4>
-        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{suggestion.description}</p>
+        <div>
+          <Label className="text-xs">Category</Label>
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="must-see">Must-See</SelectItem>
+              <SelectItem value="must-do">Must-Do</SelectItem>
+              <SelectItem value="must-try">Must-Try</SelectItem>
+              <SelectItem value="must-eat">Must-Eat</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div>
+          <Label className="text-xs">Start Time</Label>
+          <Select value={startTime} onValueChange={setStartTime}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent className="max-h-48">
+              {TIME_OPTIONS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs">End Time</Label>
+          <Select value={endTime} onValueChange={setEndTime}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent className="max-h-48">
+              {TIME_OPTIONS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs">Cost ({currency})</Label>
+          <Input value={cost} onChange={e => setCost(e.target.value)} placeholder="0" type="number" className="h-8 text-sm" />
+        </div>
+        <div>
+          <Label className="text-xs">Cost Type</Label>
+          <Select value={costCategory} onValueChange={setCostCategory}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="accommodation">Accommodation</SelectItem>
+              <SelectItem value="transport">Transport</SelectItem>
+              <SelectItem value="food">Food</SelectItem>
+              <SelectItem value="activities">Activities</SelectItem>
+              <SelectItem value="shopping">Shopping</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs">Notes</Label>
+          <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional" className="h-8 text-sm" />
+        </div>
       </div>
       <div className="flex items-center gap-2">
-        <Select value={selectedDay} onValueChange={setSelectedDay}>
-          <SelectTrigger className="w-20 h-8 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Array.from({ length: dayCount }, (_, i) => (
-              <SelectItem key={i + 1} value={String(i + 1)}>Day {i + 1}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={handleAdd}
-          disabled={createMutation.isPending}
-          className="h-8"
-        >
-          <Plus className="w-3.5 h-3.5" />
+        <Button size="sm" onClick={handleAdd} disabled={createMutation.isPending} className="h-7 text-xs">
+          <Plus className="w-3 h-3 mr-1" />
+          Add
         </Button>
+        <Button size="sm" variant="ghost" onClick={onCancel} className="h-7 text-xs">Cancel</Button>
       </div>
     </div>
   );
 }
 
-// ============ MAP TAB ============
+// ============ MAP TAB (COLOR-CODED BY DAY) ============
 
-function MapTab({ stops }: { stops: any[] }) {
+const DAY_COLORS = [
+  "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
+  "#ec4899", "#06b6d4", "#f97316", "#6366f1", "#14b8a6",
+  "#e11d48", "#84cc16", "#0ea5e9", "#a855f7", "#f43f5e",
+];
+
+function MapTab({ stops, dayCount, getDayLabel }: { stops: any[]; dayCount: number; getDayLabel: (d: number) => string }) {
   const mapRef = useRef<google.maps.Map | null>(null);
-  const [selectedStop, setSelectedStop] = useState<any>(null);
-  const [nearbySearch, setNearbySearch] = useState<{ lat: number; lng: number; type: string } | null>(null);
   const stopsWithCoords = useMemo(() => stops.filter(s => s.lat && s.lng), [stops]);
-
-  const { data: nearbyPOI, isFetching: nearbyLoading } = trpc.maps.nearbyPlaces.useQuery(
-    nearbySearch!,
-    { enabled: !!nearbySearch }
-  );
 
   const firstStop = stopsWithCoords[0];
   const center = firstStop
@@ -1038,44 +722,34 @@ function MapTab({ stops }: { stops: any[] }) {
     if (stopsWithCoords.length === 0) return;
 
     const bounds = new google.maps.LatLngBounds();
-    const infoWindow = new google.maps.InfoWindow();
 
     stopsWithCoords.forEach((stop, index) => {
       const position = { lat: Number(stop.lat), lng: Number(stop.lng) };
       bounds.extend(position);
 
+      const dayColor = DAY_COLORS[(stop.dayNumber - 1) % DAY_COLORS.length];
       const markerDiv = document.createElement("div");
-      markerDiv.className = "flex items-center justify-center w-7 h-7 rounded-full bg-primary text-white text-xs font-bold shadow-lg cursor-pointer hover:scale-110 transition-transform";
+      markerDiv.className = "flex items-center justify-center w-7 h-7 rounded-full text-white text-xs font-bold shadow-lg";
+      markerDiv.style.backgroundColor = dayColor;
       markerDiv.textContent = String(index + 1);
 
-      const marker = new google.maps.marker.AdvancedMarkerElement({
+      new google.maps.marker.AdvancedMarkerElement({
         map,
         position,
-        title: stop.title,
+        title: `${stop.title} (${getDayLabel(stop.dayNumber)})`,
         content: markerDiv,
-      });
-
-      marker.addListener("click", () => {
-        setSelectedStop(stop);
-        infoWindow.setContent(`
-          <div style="padding:8px;max-width:200px;">
-            <strong style="font-size:14px;">${stop.title}</strong>
-            <p style="font-size:12px;color:#666;margin:4px 0 0;">${stop.address || ""}</p>
-            ${stop.category ? `<span style="font-size:11px;background:#f3f4f6;padding:2px 6px;border-radius:4px;">${stop.category}</span>` : ""}
-          </div>
-        `);
-        infoWindow.open(map, marker);
       });
     });
 
     if (stopsWithCoords.length > 1) {
       map.fitBounds(bounds, 50);
 
+      // Draw route
       const directionsService = new google.maps.DirectionsService();
       const directionsRenderer = new google.maps.DirectionsRenderer({
         map,
         suppressMarkers: true,
-        polylineOptions: { strokeColor: "#6d28d9", strokeWeight: 3, strokeOpacity: 0.7 },
+        polylineOptions: { strokeColor: "#3b82f6", strokeWeight: 3, strokeOpacity: 0.6 },
       });
 
       const waypoints = stopsWithCoords.slice(1, -1).map(s => ({
@@ -1083,19 +757,21 @@ function MapTab({ stops }: { stops: any[] }) {
         stopover: true,
       }));
 
-      directionsService.route({
-        origin: { lat: Number(stopsWithCoords[0].lat), lng: Number(stopsWithCoords[0].lng) },
-        destination: { lat: Number(stopsWithCoords[stopsWithCoords.length - 1].lat), lng: Number(stopsWithCoords[stopsWithCoords.length - 1].lng) },
-        waypoints,
-        travelMode: google.maps.TravelMode.DRIVING,
-      }, (result, status) => {
-        if (status === "OK" && result) directionsRenderer.setDirections(result);
-      });
-    } else {
+      if (waypoints.length <= 23) {
+        directionsService.route({
+          origin: { lat: Number(stopsWithCoords[0].lat), lng: Number(stopsWithCoords[0].lng) },
+          destination: { lat: Number(stopsWithCoords[stopsWithCoords.length - 1].lat), lng: Number(stopsWithCoords[stopsWithCoords.length - 1].lng) },
+          waypoints,
+          travelMode: google.maps.TravelMode.DRIVING,
+        }, (result, status) => {
+          if (status === "OK" && result) directionsRenderer.setDirections(result);
+        });
+      }
+    } else if (stopsWithCoords.length === 1) {
       map.setCenter(center);
       map.setZoom(14);
     }
-  }, [stopsWithCoords]);
+  }, [stopsWithCoords, getDayLabel]);
 
   return (
     <div className="space-y-4">
@@ -1108,301 +784,263 @@ function MapTab({ stops }: { stops: any[] }) {
         />
       </Card>
 
-      {/* Selected Stop Details */}
-      {selectedStop && (
-        <Card className="border-primary/30">
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <h4 className="font-semibold">{selectedStop.title}</h4>
-                {selectedStop.address && (
-                  <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                    <MapPin className="w-3 h-3" />
-                    {selectedStop.address}
-                  </p>
-                )}
-                {selectedStop.description && (
-                  <p className="text-sm mt-2">{selectedStop.description}</p>
-                )}
-                {selectedStop.tips && (
-                  <p className="text-xs mt-2 bg-accent/50 p-2 rounded italic">💡 {selectedStop.tips}</p>
-                )}
-                <div className="flex items-center gap-3 mt-2">
-                  {selectedStop.category && (
-                    <Badge variant="outline" className="text-xs capitalize">{selectedStop.category}</Badge>
-                  )}
-                  {selectedStop.duration && (
-                    <span className="text-xs text-muted-foreground">{selectedStop.duration} min</span>
-                  )}
-                  {selectedStop.travelTimeFromPrev && (
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Car className="w-3 h-3" />
-                      {selectedStop.travelTimeFromPrev} min from prev
-                    </span>
-                  )}
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedStop(null)}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Nearby POI Suggestions */}
+      {/* Legend */}
       {stopsWithCoords.length > 0 && (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const c = stopsWithCoords[Math.floor(stopsWithCoords.length / 2)];
-              if (c) setNearbySearch({ lat: Number(c.lat), lng: Number(c.lng), type: "tourist_attraction" });
-            }}
-            disabled={nearbyLoading}
-            className="gap-1"
-          >
-            <Compass className="w-3.5 h-3.5" />
-            {nearbyLoading && nearbySearch?.type === "tourist_attraction" ? "Searching..." : "Find Nearby Attractions"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const c = stopsWithCoords[Math.floor(stopsWithCoords.length / 2)];
-              if (c) setNearbySearch({ lat: Number(c.lat), lng: Number(c.lng), type: "restaurant" });
-            }}
-            disabled={nearbyLoading}
-            className="gap-1"
-          >
-            <Utensils className="w-3.5 h-3.5" />
-            Nearby Restaurants
-          </Button>
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: Math.min(dayCount, 15) }, (_, i) => {
+            const dayStops = stopsWithCoords.filter(s => s.dayNumber === i + 1);
+            if (dayStops.length === 0) return null;
+            return (
+              <Badge key={i} variant="outline" className="text-[10px] gap-1">
+                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: DAY_COLORS[i % DAY_COLORS.length] }} />
+                {getDayLabel(i + 1)} ({dayStops.length})
+              </Badge>
+            );
+          })}
         </div>
       )}
 
-      {nearbyPOI && nearbyPOI.length > 0 && (
+      {stopsWithCoords.length === 0 && (
+        <p className="text-center text-muted-foreground text-sm py-8">
+          Add stops with locations to see them on the map.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ============ BUDGET SUMMARY TAB ============
+
+function BudgetSummaryTab({ stops, currency, getDayLabel }: { stops: any[]; currency: string; getDayLabel: (d: number) => string }) {
+  const stopsWithCost = stops.filter(s => s.cost && Number(s.cost) > 0);
+  const totalCost = stopsWithCost.reduce((sum, s) => sum + Number(s.cost), 0);
+
+  // Group by category
+  const byCategory: Record<string, number> = {};
+  stopsWithCost.forEach(s => {
+    const cat = s.costCategory || "other";
+    byCategory[cat] = (byCategory[cat] || 0) + Number(s.cost);
+  });
+
+  // Group by day
+  const byDay: Record<number, number> = {};
+  stopsWithCost.forEach(s => {
+    byDay[s.dayNumber] = (byDay[s.dayNumber] || 0) + Number(s.cost);
+  });
+
+  const categoryLabels: Record<string, string> = {
+    accommodation: "Accommodation",
+    transport: "Transport",
+    food: "Food & Dining",
+    activities: "Activities",
+    shopping: "Shopping",
+    other: "Other",
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Total */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground">Total Trip Budget</p>
+            <p className="text-3xl font-bold mt-1">{currency} {totalCost.toFixed(2)}</p>
+            <p className="text-xs text-muted-foreground mt-1">{stopsWithCost.length} items across {Object.keys(byDay).length} days</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* By Category */}
         <Card>
-          <CardContent className="p-4">
-            <h4 className="font-medium text-sm mb-3 flex items-center gap-2">
-              <Compass className="w-4 h-4 text-primary" />
-              Nearby Points of Interest
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {nearbyPOI.slice(0, 8).map((poi: any, i: number) => (
-                <div key={i} className="flex items-center gap-2 p-2 rounded-lg border border-border/50 text-sm">
-                  <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{poi.name}</p>
-                    {poi.rating && (
-                      <p className="text-xs text-muted-foreground">
-                        {poi.rating} ★ • {poi.vicinity || poi.address || ""}
-                      </p>
-                    )}
-                  </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">By Category</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {Object.entries(byCategory).sort((a, b) => b[1] - a[1]).map(([cat, amount]) => (
+              <div key={cat} className="flex items-center justify-between text-sm">
+                <span className="capitalize">{categoryLabels[cat] || cat}</span>
+                <span className="font-medium">{currency} {amount.toFixed(2)}</span>
+              </div>
+            ))}
+            {Object.keys(byCategory).length === 0 && (
+              <p className="text-sm text-muted-foreground italic">No costs added yet. Add costs to stops in the Itinerary tab.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* By Day */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">By Day</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {Object.entries(byDay).sort((a, b) => Number(a[0]) - Number(b[0])).map(([day, amount]) => (
+              <div key={day} className="flex items-center justify-between text-sm">
+                <span>{getDayLabel(Number(day))}</span>
+                <span className="font-medium">{currency} {amount.toFixed(2)}</span>
+              </div>
+            ))}
+            {Object.keys(byDay).length === 0 && (
+              <p className="text-sm text-muted-foreground italic">No costs added yet.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Detailed breakdown */}
+      {stopsWithCost.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">All Cost Items</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              <div className="grid grid-cols-[1fr_120px_100px_80px] gap-2 text-xs font-medium text-muted-foreground border-b pb-2">
+                <span>Item</span>
+                <span>Day</span>
+                <span>Category</span>
+                <span className="text-right">Amount</span>
+              </div>
+              {stopsWithCost.map(s => (
+                <div key={s.id} className="grid grid-cols-[1fr_120px_100px_80px] gap-2 text-sm py-1.5 border-b border-border/30">
+                  <span className="truncate">{s.title}</span>
+                  <span className="text-xs text-muted-foreground">{getDayLabel(s.dayNumber)}</span>
+                  <span className="text-xs capitalize">{s.costCategory || "—"}</span>
+                  <span className="text-right font-medium">{currency} {Number(s.cost).toFixed(0)}</span>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
       )}
-
-      {stopsWithCoords.length === 0 && (
-        <p className="text-center text-muted-foreground text-sm">
-          Add stops with addresses to see them on the map.
-        </p>
-      )}
-      {stopsWithCoords.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {stopsWithCoords.map((stop, i) => (
-            <div
-              key={stop.id}
-              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                selectedStop?.id === stop.id ? "border-primary bg-primary/5" : "border-border/50 hover:border-primary/30"
-              }`}
-              onClick={() => setSelectedStop(stop)}
-            >
-              <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">
-                {i + 1}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm truncate">{stop.title}</p>
-                <p className="text-xs text-muted-foreground truncate">{stop.address}</p>
-              </div>
-              {stop.travelTimeFromPrev && (
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {stop.travelTimeFromPrev} min
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
 
-// ============ BUDGET TAB ============
+// ============ BOOKING AGGREGATOR TAB ============
 
-function BudgetTab({ itineraryId, budget, currency, refetch }: {
-  itineraryId: number;
-  budget: any[];
-  currency: string;
-  refetch: () => void;
-}) {
-  const [title, setTitle] = useState("");
-  const [amount, setAmount] = useState("");
-  const [category, setCategory] = useState<string>("accommodation");
-  const [notes, setNotes] = useState("");
-  const [bookingUrl, setBookingUrl] = useState("");
+function BookingTab({ destination, startDate, endDate }: { destination: string; startDate?: any; endDate?: any }) {
+  const [guests, setGuests] = useState("2");
+  const checkIn = startDate ? format(new Date(startDate), "yyyy-MM-dd") : "";
+  const checkOut = endDate ? format(new Date(endDate), "yyyy-MM-dd") : "";
+  const encodedDest = encodeURIComponent(destination);
 
-  const createMutation = trpc.budget.create.useMutation({
-    onSuccess: () => {
-      refetch();
-      toast.success("Budget item added");
-      setTitle(""); setAmount(""); setNotes(""); setBookingUrl("");
+  const platforms = [
+    {
+      name: "Google Hotels",
+      icon: "🔍",
+      description: "Compare prices across all platforms",
+      url: `https://www.google.com/travel/hotels/${encodedDest}?q=${encodedDest}${checkIn ? `&dates=${checkIn},${checkOut}` : ""}&adults=${guests}`,
+      highlight: true,
     },
-  });
+    {
+      name: "Booking.com",
+      icon: "🏨",
+      description: "Largest selection, free cancellation",
+      url: `https://www.booking.com/searchresults.html?ss=${encodedDest}${checkIn ? `&checkin=${checkIn}&checkout=${checkOut}` : ""}&group_adults=${guests}`,
+    },
+    {
+      name: "Agoda",
+      icon: "🌏",
+      description: "Best for Asia-Pacific deals",
+      url: `https://www.agoda.com/search?city=${encodedDest}${checkIn ? `&checkIn=${checkIn}&checkOut=${checkOut}` : ""}&adults=${guests}`,
+    },
+    {
+      name: "Hotels.com",
+      icon: "⭐",
+      description: "Collect nights, earn free stays",
+      url: `https://www.hotels.com/search.do?q-destination=${encodedDest}${checkIn ? `&q-check-in=${checkIn}&q-check-out=${checkOut}` : ""}&q-rooms=1&q-room-0-adults=${guests}`,
+    },
+    {
+      name: "Trip.com",
+      icon: "✈️",
+      description: "Flights + hotels bundles",
+      url: `https://www.trip.com/hotels/list?city=${encodedDest}${checkIn ? `&checkin=${checkIn}&checkout=${checkOut}` : ""}`,
+    },
+    {
+      name: "Airbnb",
+      icon: "🏠",
+      description: "Unique stays and experiences",
+      url: `https://www.airbnb.com/s/${encodedDest}/homes${checkIn ? `?checkin=${checkIn}&checkout=${checkOut}&adults=${guests}` : ""}`,
+    },
+  ];
 
-  const deleteMutation = trpc.budget.delete.useMutation({
-    onSuccess: () => { refetch(); toast.success("Removed"); },
-  });
-
-  const total = budget.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const byCategory = budget.reduce((acc: Record<string, number>, item) => {
-    acc[item.category] = (acc[item.category] || 0) + Number(item.amount || 0);
-    return acc;
-  }, {});
-
-  const currencySymbol: Record<string, string> = { USD: "$", EUR: "€", GBP: "£", JPY: "¥", AUD: "A$", SGD: "S$", MYR: "RM" };
-  const sym = currencySymbol[currency] || currency;
+  const carRentals = [
+    {
+      name: "Google Car Rental",
+      icon: "🚗",
+      description: "Compare all car rental providers",
+      url: `https://www.google.com/travel/explore?q=car+rental+${encodedDest}`,
+      highlight: true,
+    },
+    {
+      name: "RentalCars.com",
+      icon: "🚙",
+      description: "Widest selection worldwide",
+      url: `https://www.rentalcars.com/search-results?location=${encodedDest}${checkIn ? `&puDate=${checkIn}&doDate=${checkOut}` : ""}`,
+    },
+    {
+      name: "Kayak",
+      icon: "🔎",
+      description: "Price comparison engine",
+      url: `https://www.kayak.com/cars/${encodedDest}/${checkIn || ""}/${checkOut || ""}`,
+    },
+  ];
 
   return (
     <div className="space-y-6">
-      {/* Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold">{sym}{total.toFixed(2)}</p>
-            <p className="text-xs text-muted-foreground">Total Budget</p>
-          </CardContent>
-        </Card>
-        {Object.entries(byCategory).map(([cat, amt]) => (
-          <Card key={cat}>
-            <CardContent className="p-4 text-center">
-              <p className="text-lg font-semibold">{sym}{(amt as number).toFixed(2)}</p>
-              <p className="text-xs text-muted-foreground capitalize">{cat}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Add Budget Item */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Add Expense</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Item name" />
-            <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount" />
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="accommodation">Accommodation</SelectItem>
-                <SelectItem value="transport">Transport</SelectItem>
-                <SelectItem value="food">Food</SelectItem>
-                <SelectItem value="activities">Activities</SelectItem>
-                <SelectItem value="shopping">Shopping</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              onClick={() => {
-                if (!title || !amount) { toast.error("Title and amount required"); return; }
-                createMutation.mutate({ itineraryId, title, amount, category: category as any, currency, notes: notes || undefined, bookingUrl: bookingUrl || undefined });
-              }}
-              disabled={createMutation.isPending}
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Add
-            </Button>
+      {/* Search parameters */}
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Destination</p>
+              <p className="font-semibold text-sm">{destination}</p>
+            </div>
+            {checkIn && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Dates</p>
+                <p className="font-semibold text-sm">{checkIn} → {checkOut}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Guests</p>
+              <Select value={guests} onValueChange={setGuests}>
+                <SelectTrigger className="h-8 w-24 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["1","2","3","4","5","6"].map(n => (
+                    <SelectItem key={n} value={n}>{n} {n === "1" ? "guest" : "guests"}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional)" />
-            <Input value={bookingUrl} onChange={(e) => setBookingUrl(e.target.value)} placeholder="Booking URL (optional)" />
-          </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            Click any platform below to search with your dates and guest count. Links open the booking site directly — WanderWiki does not handle payments.
+          </p>
         </CardContent>
       </Card>
 
-      {/* Budget Items List */}
-      {budget.length > 0 && (
-        <div className="space-y-2">
-          {budget.map((item) => (
-            <div key={item.id} className="flex items-center gap-3 p-3 rounded-lg border border-border/50 group">
-              <Badge variant="outline" className="capitalize text-xs">{item.category}</Badge>
-              <span className="flex-1 font-medium text-sm">{item.title}</span>
-              {item.bookingUrl && (
-                <a href={item.bookingUrl} target="_blank" rel="noopener noreferrer">
-                  <Button variant="ghost" size="icon" className="h-7 w-7">
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </Button>
-                </a>
-              )}
-              <span className="font-semibold text-sm">{sym}{Number(item.amount).toFixed(2)}</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
-                onClick={() => deleteMutation.mutate({ id: item.id })}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ============ BOOKING TAB ============
-
-function BookingTab({ destination }: { destination: string }) {
-  const encodedDest = encodeURIComponent(destination);
-
-  const bookingLinks = [
-    { name: "Agoda", url: `https://www.agoda.com/search?city=${encodedDest}`, description: "Hotels & vacation rentals across Asia and worldwide" },
-    { name: "Booking.com", url: `https://www.booking.com/searchresults.html?ss=${encodedDest}`, description: "World's largest selection of hotels and accommodations" },
-    { name: "Hotels.com", url: `https://www.hotels.com/search.do?q-destination=${encodedDest}`, description: "Earn rewards with every stay" },
-    { name: "Trip.com", url: `https://www.trip.com/hotels/?city=${encodedDest}`, description: "Hotels, flights, and train tickets" },
-    { name: "Airbnb", url: `https://www.airbnb.com/s/${encodedDest}/homes`, description: "Unique stays and local experiences" },
-  ];
-
-  const carRentalLinks = [
-    { name: "Rentalcars.com", url: `https://www.rentalcars.com/search-results?location=${encodedDest}`, description: "Compare car rental deals worldwide" },
-    { name: "Kayak", url: `https://www.kayak.com/cars/${encodedDest}`, description: "Search hundreds of car rental sites" },
-    { name: "Discover Cars", url: `https://www.discovercars.com/?location=${encodedDest}`, description: "Best price guarantee on car rentals" },
-  ];
-
-  return (
-    <div className="space-y-8">
+      {/* Accommodation */}
       <div>
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          🏨 Accommodation
+        <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+          <Hotel className="w-4 h-4" />
+          Accommodation
         </h3>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {bookingLinks.map((link) => (
-            <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer">
-              <Card className="h-full hover:shadow-md hover:border-primary/20 transition-all duration-200 cursor-pointer group">
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-semibold group-hover:text-primary transition-colors">{link.name}</h4>
-                    <ExternalLink className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {platforms.map(p => (
+            <a key={p.name} href={p.url} target="_blank" rel="noopener noreferrer">
+              <Card className={`hover:shadow-md transition-shadow cursor-pointer ${p.highlight ? "border-primary/40 bg-primary/5" : ""}`}>
+                <CardContent className="p-4 flex items-center gap-3">
+                  <span className="text-2xl">{p.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm">{p.name}</p>
+                    <p className="text-xs text-muted-foreground">{p.description}</p>
                   </div>
-                  <p className="text-sm text-muted-foreground">{link.description}</p>
-                  <p className="text-xs text-primary mt-2">Search for: {destination}</p>
+                  <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0" />
                 </CardContent>
               </Card>
             </a>
@@ -1410,21 +1048,23 @@ function BookingTab({ destination }: { destination: string }) {
         </div>
       </div>
 
+      {/* Car Rental */}
       <div>
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          🚗 Car Rental
+        <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+          <Car className="w-4 h-4" />
+          Car Rental
         </h3>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {carRentalLinks.map((link) => (
-            <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer">
-              <Card className="h-full hover:shadow-md hover:border-primary/20 transition-all duration-200 cursor-pointer group">
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-semibold group-hover:text-primary transition-colors">{link.name}</h4>
-                    <ExternalLink className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {carRentals.map(p => (
+            <a key={p.name} href={p.url} target="_blank" rel="noopener noreferrer">
+              <Card className={`hover:shadow-md transition-shadow cursor-pointer ${p.highlight ? "border-primary/40 bg-primary/5" : ""}`}>
+                <CardContent className="p-4 flex items-center gap-3">
+                  <span className="text-2xl">{p.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm">{p.name}</p>
+                    <p className="text-xs text-muted-foreground">{p.description}</p>
                   </div>
-                  <p className="text-sm text-muted-foreground">{link.description}</p>
-                  <p className="text-xs text-primary mt-2">Search for: {destination}</p>
+                  <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0" />
                 </CardContent>
               </Card>
             </a>
@@ -1435,137 +1075,129 @@ function BookingTab({ destination }: { destination: string }) {
   );
 }
 
-// ============ AI TAB ============
+// ============ AI TAB (MINIMIZED) ============
 
 function AITab({ itineraryId, destination, stops }: { itineraryId: number; destination: string; stops: any[] }) {
-  const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
-  const [input, setInput] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [message, setMessage] = useState("");
+  const [chatHistory, setChatHistory] = useState<{ role: string; content: string }[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const chatMutation = trpc.ai.chat.useMutation({
     onSuccess: (data) => {
-      setMessages(prev => [...prev, { role: "assistant", content: data.content }]);
+      setChatHistory(prev => [...prev, { role: "assistant", content: data.content }]);
+      setIsLoading(false);
     },
-    onError: () => toast.error("Failed to get response"),
-  });
-
-  const tipsMutation = trpc.ai.generateTips.useMutation({
-    onSuccess: (data) => {
-      setMessages(prev => [...prev, { role: "assistant", content: data.content }]);
+    onError: () => {
+      toast.error("AI failed to respond");
+      setIsLoading(false);
     },
   });
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
 
   const handleSend = () => {
-    if (!input.trim()) return;
-    const newMessages = [...messages, { role: "user" as const, content: input }];
-    setMessages(newMessages);
-    setInput("");
-
-    const context = `Destination: ${destination}\nStops: ${stops.map(s => `${s.title} (${s.category})`).join(", ")}`;
-    chatMutation.mutate({ messages: newMessages, itineraryContext: context });
+    if (!message.trim()) return;
+    const newMessages: { role: "user" | "assistant" | "system"; content: string }[] = [
+      ...chatHistory.map(m => ({ role: m.role as "user" | "assistant" | "system", content: m.content })),
+      { role: "user" as const, content: message },
+    ];
+    setChatHistory(prev => [...prev, { role: "user", content: message }]);
+    setIsLoading(true);
+    chatMutation.mutate({
+      messages: newMessages,
+      itineraryContext: `Destination: ${destination}. Stops: ${stops.map(s => s.title).join(", ")}`,
+    });
+    setMessage("");
   };
 
-  const suggestedPrompts = [
-    `What are the hidden gems in ${destination}?`,
-    `What should I skip in ${destination}?`,
-    `Best time to visit each stop?`,
-    `Local food recommendations for ${destination}`,
-    `Money-saving tips for ${destination}`,
-  ];
-
   return (
-    <div className="space-y-4">
-      <Card className="h-[500px] flex flex-col">
-        <CardHeader className="pb-3 border-b">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary" />
-            AI Travel Assistant
-          </CardTitle>
-        </CardHeader>
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length === 0 && (
-            <div className="text-center py-8 space-y-4">
-              <Sparkles className="w-10 h-10 text-primary/30 mx-auto" />
-              <p className="text-muted-foreground text-sm">
-                Ask me anything about your trip to {destination}!
-              </p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {suggestedPrompts.map((prompt, i) => (
-                  <Button
-                    key={i}
-                    variant="outline"
-                    size="sm"
-                    className="text-xs"
-                    onClick={() => {
-                      setMessages([{ role: "user", content: prompt }]);
-                      chatMutation.mutate({
-                        messages: [{ role: "user", content: prompt }],
-                        itineraryContext: `Destination: ${destination}`,
-                      });
-                    }}
-                  >
-                    {prompt}
-                  </Button>
-                ))}
-              </div>
-            </div>
+    <Card>
+      <CardContent className="p-4">
+        <p className="text-xs text-muted-foreground mb-3">
+          Ask for hidden gems, must-eat spots, route tips, or help refining your itinerary.
+        </p>
+
+        {/* Chat messages - compact */}
+        <div className="space-y-2 max-h-[300px] overflow-y-auto mb-3">
+          {chatHistory.length === 0 && (
+            <p className="text-sm text-muted-foreground italic text-center py-4">
+              Try: "What are the hidden gems in {destination}?" or "Optimize my route to avoid backtracking"
+            </p>
           )}
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
-                msg.role === "user"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted"
-              }`}>
-                {msg.role === "assistant" ? (
-                  <div className="text-sm prose prose-sm max-w-none">
-                    <Streamdown>{msg.content}</Streamdown>
-                  </div>
-                ) : (
-                  <p className="text-sm">{msg.content}</p>
-                )}
-              </div>
+          {chatHistory.map((msg, i) => (
+            <div key={i} className={`text-sm p-2 rounded-lg ${msg.role === "user" ? "bg-primary/10 ml-8" : "bg-accent/50 mr-8"}`}>
+              {msg.content}
             </div>
           ))}
-          {chatMutation.isPending && (
-            <div className="flex justify-start">
-              <div className="bg-muted rounded-2xl px-4 py-3">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce" />
-                  <div className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:0.1s]" />
-                  <div className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:0.2s]" />
-                </div>
-              </div>
-            </div>
+          {isLoading && (
+            <div className="text-sm p-2 rounded-lg bg-accent/50 mr-8 animate-pulse">Thinking...</div>
           )}
         </div>
-        <div className="p-4 border-t">
-          <div className="flex gap-2">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about your trip..."
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-            />
-            <Button onClick={handleSend} disabled={chatMutation.isPending || !input.trim()}>
-              <Send className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      </Card>
 
-      <Button
-        variant="outline"
-        className="gap-2"
-        onClick={() => tipsMutation.mutate({ destination })}
-        disabled={tipsMutation.isPending}
-      >
-        <Wand2 className="w-4 h-4" />
-        {tipsMutation.isPending ? "Generating tips..." : `Generate Travel Tips for ${destination}`}
+        {/* Input */}
+        <div className="flex gap-2">
+          <Input
+            value={message}
+            onChange={e => setMessage(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSend()}
+            placeholder="Ask about your trip..."
+            className="flex-1"
+          />
+          <Button onClick={handleSend} disabled={!message.trim() || isLoading} size="sm">
+            <Send className="w-4 h-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============ EXPORT BUTTON ============
+
+function ExportButton({ itinerary }: { itinerary: any }) {
+  const handleExportCSV = () => {
+    const stops = itinerary.stops || [];
+    const headers = ["Day", "Date", "Time", "Stop", "Location", "Category", "Cost", "Notes"];
+    const rows = stops.map((s: any) => [
+      s.dayNumber,
+      s.stopDate || "",
+      s.startTime ? `${s.startTime}${s.endTime ? " - " + s.endTime : ""}` : "",
+      s.title,
+      s.address || "",
+      s.category,
+      s.cost || "",
+      s.notes || "",
+    ]);
+
+    const csv = [headers, ...rows].map(row => row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${itinerary.title.replace(/[^a-zA-Z0-9]/g, "_")}_itinerary.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Exported as CSV (opens in Excel/Google Sheets)");
+  };
+
+  const handleCopyTable = () => {
+    const stops = itinerary.stops || [];
+    const headers = "Day\tDate\tTime\tStop\tLocation\tCategory\tCost\tNotes";
+    const rows = stops.map((s: any) =>
+      `${s.dayNumber}\t${s.stopDate || ""}\t${s.startTime || ""}\t${s.title}\t${s.address || ""}\t${s.category}\t${s.cost || ""}\t${s.notes || ""}`
+    );
+    const table = [headers, ...rows].join("\n");
+    navigator.clipboard.writeText(table);
+    toast.success("Copied! Paste into Excel or Google Sheets");
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-1 h-7 text-xs">
+        <Download className="w-3 h-3" />
+        CSV
+      </Button>
+      <Button variant="outline" size="sm" onClick={handleCopyTable} className="gap-1 h-7 text-xs">
+        <Copy className="w-3 h-3" />
+        Copy
       </Button>
     </div>
   );

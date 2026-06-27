@@ -1,256 +1,186 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { trpc } from "@/lib/trpc";
 import { Navbar } from "@/components/Navbar";
-import { getLoginUrl } from "@/const";
 import { Link } from "wouter";
-import {
-  Compass,
-  Map,
-  Sparkles,
-  Route,
-  Share2,
-  Globe,
-  ArrowRight,
-  MapPin,
-  Utensils,
-  Camera,
-  Star,
-} from "lucide-react";
+import { Plus, MapPin, Calendar, Users, ArrowRight } from "lucide-react";
+import { getLoginUrl } from "@/const";
+
+// Sample itineraries to showcase the platform
+const SAMPLE_ITINERARIES = [
+  {
+    id: "sicily",
+    title: "Sicily Road Trip Loop",
+    destination: "Sicily, Italy",
+    duration: 10,
+    style: "Solo",
+    stops: 24,
+    image: "https://images.unsplash.com/photo-1523365280197-f1783db9fe62?w=400&h=250&fit=crop",
+  },
+  {
+    id: "alaska",
+    title: "Alaska Highway Adventure",
+    destination: "Alaska, USA",
+    duration: 14,
+    style: "Couple",
+    stops: 18,
+    image: "https://images.unsplash.com/photo-1531176175280-109b5d3e5e66?w=400&h=250&fit=crop",
+  },
+  {
+    id: "japan",
+    title: "Japan Golden Route",
+    destination: "Tokyo → Kyoto → Osaka",
+    duration: 12,
+    style: "Solo",
+    stops: 30,
+    image: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=400&h=250&fit=crop",
+  },
+  {
+    id: "newzealand",
+    title: "NZ South Island Loop",
+    destination: "New Zealand",
+    duration: 10,
+    style: "Couple",
+    stops: 20,
+    image: "https://images.unsplash.com/photo-1469521669194-babb45599def?w=400&h=250&fit=crop",
+  },
+  {
+    id: "portugal",
+    title: "Portugal Coastal Drive",
+    destination: "Lisbon → Porto",
+    duration: 8,
+    style: "Family",
+    stops: 16,
+    image: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=400&h=250&fit=crop",
+  },
+  {
+    id: "thailand",
+    title: "Thailand Islands & Temples",
+    destination: "Bangkok → Chiang Mai → Islands",
+    duration: 14,
+    style: "Group",
+    stops: 22,
+    image: "https://images.unsplash.com/photo-1528181304800-259b08848526?w=400&h=250&fit=crop",
+  },
+];
 
 export default function Home() {
   const { isAuthenticated } = useAuth();
+  const { data: publicItineraries } = trpc.itinerary.discover.useQuery({ limit: 6, offset: 0 });
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
 
-      {/* Hero Section */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/30" />
-        <div className="absolute top-20 right-20 w-72 h-72 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-10 left-10 w-96 h-96 bg-accent/20 rounded-full blur-3xl" />
-
-        <div className="container relative py-24 md:py-36">
-          <div className="max-w-3xl mx-auto text-center space-y-8">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium">
-              <Sparkles className="w-4 h-4" />
-              AI-Powered Travel Planning
-            </div>
-
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1]">
-              Plan Smarter.
-              <br />
-              <span className="text-primary">Travel Better.</span>
+      <main className="flex-1">
+        {/* Hero - compact, no scroll needed */}
+        <section className="py-12 md:py-16">
+          <div className="container max-w-5xl text-center">
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+              Plan Smarter. Travel Better.
             </h1>
-
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Build comprehensive travel itineraries with AI-optimized routes, real traveler tips,
-              and zero backtracking. Your trips, beautifully organized and effortlessly shared.
+            <p className="mt-3 text-muted-foreground max-w-xl mx-auto">
+              Build AI-optimized itineraries with zero backtracking. Share with friends. Link to bookings.
             </p>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+            <div className="mt-6 flex items-center justify-center gap-3">
               {isAuthenticated ? (
                 <Link href="/itinerary/new">
-                  <Button size="lg" className="gap-2 text-base px-8 h-12">
-                    Start Planning
-                    <ArrowRight className="w-4 h-4" />
+                  <Button size="lg" className="gap-2">
+                    <Plus className="w-4 h-4" />
+                    Create Itinerary
                   </Button>
                 </Link>
               ) : (
                 <a href={getLoginUrl()}>
-                  <Button size="lg" className="gap-2 text-base px-8 h-12">
-                    Start Planning — It's Free
-                    <ArrowRight className="w-4 h-4" />
+                  <Button size="lg" className="gap-2">
+                    <Plus className="w-4 h-4" />
+                    Start Planning
                   </Button>
                 </a>
               )}
               <Link href="/discover">
-                <Button variant="outline" size="lg" className="gap-2 text-base px-8 h-12">
-                  <Globe className="w-4 h-4" />
-                  Explore Itineraries
+                <Button variant="outline" size="lg" className="gap-2">
+                  Browse Itineraries
+                  <ArrowRight className="w-4 h-4" />
                 </Button>
               </Link>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Features Section */}
-      <section className="py-24 bg-muted/30">
-        <div className="container">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-              Everything You Need for the Perfect Trip
-            </h2>
-            <p className="text-muted-foreground mt-4 text-lg max-w-2xl mx-auto">
-              From planning to sharing, WanderWiki consolidates your entire travel workflow into one elegant platform.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature, i) => (
-              <div
-                key={i}
-                className="group p-6 rounded-2xl bg-card border border-border/50 hover:border-primary/20 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300"
-              >
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/15 transition-colors">
-                  <feature.icon className="w-6 h-6 text-primary" />
-                </div>
-                <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  {feature.description}
-                </p>
+        {/* Sample Itineraries Grid */}
+        <section className="pb-16">
+          <div className="container max-w-6xl">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold">Popular Itineraries</h2>
+                <p className="text-sm text-muted-foreground">Curated trips from the community</p>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Category Tags Section */}
-      <section className="py-24">
-        <div className="container">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-              Curate Every Moment
-            </h2>
-            <p className="text-muted-foreground mt-4 text-lg max-w-2xl mx-auto">
-              Tag and organize your stops by category to ensure you never miss the best experiences.
-            </p>
-          </div>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-4xl mx-auto">
-            {categories.map((cat, i) => (
-              <div
-                key={i}
-                className="text-center p-6 rounded-2xl border border-border/50 hover:shadow-md transition-all duration-300"
-                style={{ backgroundColor: `var(--tag-bg)`, borderColor: `var(--tag-border)` }}
-              >
-                <div
-                  className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 ${cat.bgClass}`}
-                >
-                  <cat.icon className={`w-7 h-7 ${cat.iconClass}`} />
-                </div>
-                <h3 className="font-semibold text-base">{cat.title}</h3>
-                <p className="text-sm text-muted-foreground mt-1">{cat.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-24 bg-primary/5">
-        <div className="container">
-          <div className="max-w-2xl mx-auto text-center space-y-6">
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-              Ready to Plan Your Next Adventure?
-            </h2>
-            <p className="text-muted-foreground text-lg">
-              Join travelers who plan smarter, share better, and never backtrack.
-            </p>
-            {isAuthenticated ? (
-              <Link href="/itinerary/new">
-                <Button size="lg" className="gap-2 text-base px-8 h-12">
-                  Create Your First Itinerary
-                  <ArrowRight className="w-4 h-4" />
+              <Link href="/discover">
+                <Button variant="ghost" size="sm" className="gap-1">
+                  View all <ArrowRight className="w-3.5 h-3.5" />
                 </Button>
               </Link>
-            ) : (
-              <a href={getLoginUrl()}>
-                <Button size="lg" className="gap-2 text-base px-8 h-12">
-                  Get Started Free
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              </a>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-border/50 py-8">
-        <div className="container flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
-              <Compass className="w-3.5 h-3.5 text-primary-foreground" />
             </div>
-            <span className="font-semibold text-sm">WanderWiki</span>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(publicItineraries && publicItineraries.length > 0 ? publicItineraries : SAMPLE_ITINERARIES).map((item: any, idx: number) => (
+                <Card key={item.id || idx} className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer group">
+                  <div className="h-36 bg-muted overflow-hidden">
+                    {(item.image || item.coverImageUrl) ? (
+                      <img
+                        src={item.image || item.coverImageUrl}
+                        alt={item.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
+                        <MapPin className="w-8 h-8 text-primary/40" />
+                      </div>
+                    )}
+                  </div>
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold text-sm truncate">{item.title}</h3>
+                    <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {item.destination}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Badge variant="secondary" className="text-[10px] h-5">
+                        <Calendar className="w-2.5 h-2.5 mr-1" />
+                        {item.duration} days
+                      </Badge>
+                      {(item.style || item.travelStyle) && (
+                        <Badge variant="outline" className="text-[10px] h-5 capitalize">
+                          <Users className="w-2.5 h-2.5 mr-1" />
+                          {item.style || item.travelStyle}
+                        </Badge>
+                      )}
+                      {item.stops && (
+                        <Badge variant="outline" className="text-[10px] h-5">
+                          {item.stops} stops
+                        </Badge>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Plan smarter. Travel better. Share freely.
-          </p>
+        </section>
+      </main>
+
+      {/* Minimal footer */}
+      <footer className="border-t py-4">
+        <div className="container max-w-6xl flex items-center justify-between text-xs text-muted-foreground">
+          <span>WanderWiki</span>
+          <span>Plan smarter. Travel better. Share freely.</span>
         </div>
       </footer>
     </div>
   );
 }
-
-const features = [
-  {
-    icon: Route,
-    title: "AI Route Optimizer",
-    description:
-      "Eliminate backtracking with intelligent route optimization powered by Google Maps. Maximize every minute of your trip.",
-  },
-  {
-    icon: Map,
-    title: "Interactive Map View",
-    description:
-      "See your entire journey plotted on a live map with numbered stops, real travel times, and route visualization.",
-  },
-  {
-    icon: Sparkles,
-    title: "AI Travel Assistant",
-    description:
-      "Get personalized suggestions for hidden gems, must-eat spots, and local tips from an AI trained on real traveler experiences.",
-  },
-  {
-    icon: Share2,
-    title: "Easy Sharing",
-    description:
-      "Share your itineraries with a single link. Browse community trips for inspiration and discover new destinations.",
-  },
-  {
-    icon: Globe,
-    title: "Booking Aggregator",
-    description:
-      "Surface accommodation and transport options from Agoda, Booking.com, and more — all linked out for easy booking.",
-  },
-  {
-    icon: MapPin,
-    title: "Day-by-Day Planning",
-    description:
-      "Organize stops into days with time slots, travel durations, and daily summaries for a perfectly structured trip.",
-  },
-];
-
-const categories = [
-  {
-    icon: Camera,
-    title: "Must-See",
-    description: "Iconic landmarks & views",
-    bgClass: "bg-[oklch(0.9_0.08_260)]",
-    iconClass: "text-[oklch(0.45_0.15_260)]",
-  },
-  {
-    icon: Compass,
-    title: "Must-Do",
-    description: "Experiences & activities",
-    bgClass: "bg-[oklch(0.9_0.08_160)]",
-    iconClass: "text-[oklch(0.4_0.12_160)]",
-  },
-  {
-    icon: Star,
-    title: "Must-Try",
-    description: "Unique local experiences",
-    bgClass: "bg-[oklch(0.9_0.08_50)]",
-    iconClass: "text-[oklch(0.45_0.12_50)]",
-  },
-  {
-    icon: Utensils,
-    title: "Must-Eat",
-    description: "Food & restaurants",
-    bgClass: "bg-[oklch(0.9_0.08_25)]",
-    iconClass: "text-[oklch(0.45_0.15_25)]",
-  },
-];

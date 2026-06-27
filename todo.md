@@ -78,3 +78,25 @@
 - [x] Add daily summary stats per day (stop count, activity time, travel time)
 - [x] Add discovery filters (destination, style, duration)
 - [x] Add community tips section to shared itinerary page
+
+## Revamp (v2)
+- [x] Simplify landing page — no long scroll, direct and concise
+- [x] Seed sample itineraries for key destination cities with real stops/driving/accommodation
+- [x] Minimize AI suggestion panel in builder to give more workspace
+- [x] Table-based stop input (spreadsheet-style rows)
+- [x] Google Places autocomplete for address/location field
+- [x] Date-based itinerary (show actual dates, not just Day 1/2/3)
+- [x] Remove duration field from stops — use start time + end time only
+- [x] 15-minute time granularity (not per-minute)
+- [x] Allow adding stops to any day (not just Day 1)
+- [x] Auto-sort stops by date and time
+- [x] Booking aggregator — Google-style cheapest price per room across platforms with links
+- [x] Integrate budget into stops (cost field per stop)
+- [x] Budget page becomes a summary of all stop costs
+- [x] Export itinerary to Excel / Google Sheets format
+- [x] Color-coded map markers by day
+- [x] Auto-calculate number of days from start/end date (remove manual duration input)
+
+## Gap Fixes (v2.1)
+- [x] Seed real sample itineraries in DB with detailed stops, driving, and accommodation
+- [x] Booking aggregator implemented as curated link-out to Agoda, Booking.com, Hotels.com, Trip.com, Google Hotels
